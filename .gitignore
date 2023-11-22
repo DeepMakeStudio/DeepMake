@@ -1,0 +1,22 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.dll
+*.so
+
+#redis dbs
+*.rdb
+
+#debug folders
+debug/
+
+#build folder
+build/
+bin/
+
+#huey
+huey.db*
+huey_storage.db*

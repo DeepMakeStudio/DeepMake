@@ -1,0 +1,23 @@
+name: deepmake
+channels:
+  - defaults
+dependencies:
+  - pip
+  - python
+  - pip:
+      - anyio
+      - click
+      - detach3k
+      - fastapi
+      - gradio
+      - h11
+      - huey
+      - idna
+      - opencv-python
+      - pydantic
+      - pymemcache
+      - python-multipart
+      - requests
+      - sniffio
+      - starlette
+      - uvicorn
