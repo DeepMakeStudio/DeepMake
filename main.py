@@ -15,6 +15,7 @@ import sys
 import importlib
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
+import huey
 if sys.platform in ["linux", "darwin"]:
     import detach
 
@@ -40,7 +41,7 @@ storage = SqliteStorage(name="storage", filename='huey_storage.db')
 # broker.add_middleware(Results(backend=result_backend))
 
 # huey = FileHuey(path="huey") 
-huey = SqliteHuey(filename='huey.db')
+hueyrun = SqliteHuey(filename='huey.db')
 
 # worker = Worker(broker=broker)
 # worker.start()
@@ -111,7 +112,7 @@ async def store_image(image):
     storage.put_data(img_id,img_data)
     return img_id
 
-# @huey.task()
+# @hueyrun.task()
 # def store_image_file(img_data):
 #     img_id = str(uuid.uuid4())
 #     memcache_client.set(img_id, img_data)
@@ -166,7 +167,7 @@ def set_plugin_config(plugin_name: str, config: dict):
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
-@huey.task()
+@hueyrun.task()
 def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
