@@ -7,13 +7,14 @@ import os
 import base64
 import uuid
 import json
+import psutil
 import requests
 import subprocess
 import numpy as np
 import sys
 import importlib
-from huey import FileHuey, SqliteHuey
-from huey.storage import FileStorage, SqliteStorage
+from huey import SqliteHuey
+from huey.storage import SqliteStorage
 if sys.platform in ["linux", "darwin"]:
     import detach
 
@@ -222,10 +223,19 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
 def stop_plugin(plugin_name: str):
     # need some test to ensure open port
     if plugin_name in process_ids.keys():
-        pid = process_ids[plugin_name] + 7
+        parent_pid = process_ids[plugin_name]   # my example
+        parent = psutil.Process(parent_pid)
+        for child in parent.children(recursive=True):  # or parent.children() for recursive=False
+            child.kill()
+        parent.kill()
         # os.kill(pid, signal.SIGKILL)
         
     return f"{plugin_name} stopped"
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    for plugin_name in process_ids.keys():
+        stop_plugin(plugin_name)
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
