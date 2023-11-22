@@ -101,6 +101,15 @@ def load_plugins():
                 continue
             plugin_list.append(folder)
 
+    if sys.platform != "win32":
+        p = subprocess.Popen("huey_consumer.py main.huey".split())
+    else:
+        huey_script_path = os.path.join(os.path.dirname(sys.executable), "Scripts\\huey_consumer.py")
+        p = subprocess.Popen([sys.executable, huey_script_path, "main.huey"], shell=True)
+    pid = p.pid
+
+    process_ids["huey"] = pid
+
 async def serialize_image(image):
     image= base64.b64encode(await image.read())
     img_data = image.decode()
@@ -211,11 +220,11 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     port_mapping[plugin_name] = str(port)
     conda_env = plugin_info[plugin_name]["plugin"]["env"]
     if sys.platform != "win32":
-        pid = detach.call(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=sys.stdout)
+        p = subprocess.Popen(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split())
     else:
         conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
         p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
-        pid = p.pid
+    pid = p.pid
     process_ids[plugin_name] = pid
 
     return {"started": True, "plugin_name": plugin_name, "port": port}
