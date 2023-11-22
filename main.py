@@ -166,7 +166,7 @@ def set_plugin_config(plugin_name: str, config: dict):
         raise HTTPException(status_code=404, detail="Plugin not found")
 
 @huey.task()
-def call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
+def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
     else:
@@ -242,7 +242,7 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
         if input not in plugin_endpoints[plugin_name][endpoint]['inputs'].keys():
             warnings.append(f"Input '{input}' not used by endpoint '{endpoint}'")
             del json_data[input]
-    job = call_endpoint(plugin_name, endpoint, json_data, port_mapping, plugin_endpoints)
+    job = huey_call_endpoint(plugin_name, endpoint, json_data, port_mapping, plugin_endpoints)
     if warnings != []:
         return {"job_id": job.id, "warnings": warnings}
     new_job(job)
