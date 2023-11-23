@@ -15,10 +15,7 @@ import sys
 import importlib
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
-import huey
-if sys.platform in ["linux", "darwin"]:
-    import detach
-
+from huey.constants import EmptyData
 global port_mapping
 global plugin_endpoints
 global storage_dictionary
@@ -41,7 +38,7 @@ storage = SqliteStorage(name="storage", filename='huey_storage.db')
 # broker.add_middleware(Results(backend=result_backend))
 
 # huey = FileHuey(path="huey") 
-hueyrun = SqliteHuey(filename='huey.db')
+huey = SqliteHuey(filename='huey.db')
 
 # worker = Worker(broker=broker)
 # worker.start()
@@ -85,7 +82,7 @@ plugin_info = {}
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
-    if img_data == huey.constants.EmptyData:
+    if img_data == EmptyData:
         raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
     return img_data
 
@@ -97,6 +94,7 @@ def load_plugins():
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
                 continue
+            # module = importlib.import_module(f".{folder}.plugin", package=PLUGINS_DIRECTORY)
             if "plugin.py" not in os.listdir(os.path.join(PLUGINS_DIRECTORY, folder)):
                 continue
             plugin_list.append(folder)
@@ -176,7 +174,7 @@ def set_plugin_config(plugin_name: str, config: dict):
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
-@hueyrun.task()
+@huey.task()
 def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
