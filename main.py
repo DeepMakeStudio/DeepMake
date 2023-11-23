@@ -13,9 +13,12 @@ import subprocess
 import numpy as np
 import sys
 import importlib
+from time import sleep
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
+
+
 global port_mapping
 global plugin_endpoints
 global storage_dictionary
@@ -59,8 +62,6 @@ finished_jobs = []
 running_jobs = []
 jobs = {}
 
-plugin_list = []
-plugin_states = {plugin: "INIT" for plugin in plugin_list}
 plugin_info = {}
 
 def fetch_image(img_id):
@@ -70,9 +71,14 @@ def fetch_image(img_id):
     return img_data
 
 @app.on_event("startup")
-def load_plugins():
+def startup():
     global plugin_list
     plugin_list = []
+    load_plugins()
+    global plugin_states
+    plugin_states = {plugin: "INIT" for plugin in plugin_list}
+
+def load_plugins():
     for folder in os.listdir(PLUGINS_DIRECTORY):
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
@@ -112,7 +118,17 @@ async def reload_plugins():
 
 @app.get("/plugins/get_list")
 def get_plugin_list():
-    return {"plugins": list(plugin_list)}
+    return {"plugins": list(plugin_states)}
+
+@app.get("/plugins/get_states")
+def get_plugin_list():
+    result = {}
+    for plugin in plugin_states.keys():
+        if plugin in port_mapping.keys():
+            result[plugin] = {"state": plugin_states[plugin], "port": port_mapping[plugin]}
+        else:
+            result[plugin] = {"state": plugin_states[plugin]}
+    return result
 
 @app.get("/plugins/get_info/{plugin_name}")
 def get_plugin_info(plugin_name: str):
@@ -120,7 +136,7 @@ def get_plugin_info(plugin_name: str):
         if plugin_name not in plugin_info.keys():
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
-        plugin_endpoints[plugin_name] = plugin.endpoints
+            plugin_endpoints[plugin_name] = plugin.endpoints
         return plugin_info[plugin_name]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
@@ -143,37 +159,10 @@ def set_plugin_config(plugin_name: str, config: dict):
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
-@huey.task()
-def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
-    if plugin_name not in plugin_list:
-        raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
-    else:
-        if plugin_name not in port_mapping.keys():
-            start_plugin(plugin_name)
-    port = port_mapping[plugin_name]
-    endpoint = plugin_endpoints[plugin_name][endpoint]
-    inputs_string = ""
-    for input in [input for input in endpoint['inputs'] if "optional=true" not in endpoint['inputs'][input]]:
-        if input not in json_data.keys():
-            return {"status": "failed", "error": f"Missing required input {input}"}
-        inputs_string += json_data[input] + "/"
-
-    for ct, input in enumerate([input for input in json_data.keys() if "optional=true" in endpoint['inputs'][input]]):
-        if ct == 0:
-            inputs_string += f"?{input}={str(json_data[input])}"
-        else:
-            inputs_string += f"&{input}={str(json_data[input])}"
-
-    url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
-
-    response = client.get(url, timeout=120).json()
-    return response
-
 @app.get("/plugins/start_plugin/{plugin_name}")
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
     if plugin_name not in plugin_info.keys():
         get_plugin_info(plugin_name)
-    
     plugin_states[plugin_name] = "STARTING"
 
     if plugin_name in port_mapping.keys():
@@ -224,6 +213,11 @@ async def shutdown_event():
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
+    if plugin_name not in plugin_list:
+        raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
+    if plugin_name not in port_mapping.keys():
+        print(f"{plugin_name} not yet started, starting now")
+        await start_plugin(plugin_name)
     if plugin_name not in plugin_endpoints.keys():
         print(f"Plugin {plugin_name} not in plugin_endpoints")
         get_plugin_info(plugin_name)
@@ -243,6 +237,35 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
     new_job(job)
     return {"job_id": job.id}
 
+@huey.task()
+def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
+    result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+    counter = 0
+    while result[plugin_name]["state"] != "RUNNING":
+        sleep(10)
+        result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+        counter += 1
+        if counter > 10:
+            raise HTTPException(status_code=500, detail=f"Plugin {plugin_name} failed to start")
+    else:
+        port = result[plugin_name]["port"]
+    endpoint = plugin_endpoints[plugin_name][endpoint]
+    inputs_string = ""
+    for input in [input for input in endpoint['inputs'] if "optional=true" not in endpoint['inputs'][input]]:
+        if input not in json_data.keys():
+            return {"status": "failed", "error": f"Missing required input {input}"}
+        inputs_string += json_data[input] + "/"
+
+    for ct, input in enumerate([input for input in json_data.keys() if "optional=true" in endpoint['inputs'][input]]):
+        if ct == 0:
+            inputs_string += f"?{input}={str(json_data[input])}"
+        else:
+            inputs_string += f"&{input}={str(json_data[input])}"
+
+    url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
+
+    response = client.get(url, timeout=120).json()
+    return response
 
 @app.get("/plugin/status/")
 def get_all_plugin_status():
