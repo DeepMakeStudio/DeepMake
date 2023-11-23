@@ -15,36 +15,17 @@ import sys
 import importlib
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
-import huey
-if sys.platform in ["linux", "darwin"]:
-    import detach
+from huey.constants import EmptyData
 
 global port_mapping
 global plugin_endpoints
 global storage_dictionary
 
 app = FastAPI()
-# memcache_client = base.Client(('localhost', 11211))
-if os.path.exists("huey"):
-    shutil.rmtree("huey")
-if os.path.exists("huey_storage"):
-    shutil.rmtree("huey_storage")
-# storage = FileStorage("storage", path='huey_storage')
+
 storage = SqliteStorage(name="storage", filename='huey_storage.db')
 
-#Dramatiq + RabbitMQ
-# broker = RabbitmqBroker(host="127.0.0.1", port=5672)
-# dramatiq.set_broker(broker)
-# broker.declare_queue("default")
-# result_backend = MemcachedBackend(servers=["127.0.0.1"])
-# # result_backend = RedisBackend()
-# broker.add_middleware(Results(backend=result_backend))
-
-# huey = FileHuey(path="huey") 
-hueyrun = SqliteHuey(filename='huey.db')
-
-# worker = Worker(broker=broker)
-# worker.start()
+huey = SqliteHuey(filename='huey.db')
 
 app = FastAPI()
 client = requests.Session()
@@ -85,7 +66,7 @@ plugin_info = {}
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
-    if img_data == huey.constants.EmptyData:
+    if img_data == EmptyData:
         raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
     return img_data
 
@@ -121,22 +102,9 @@ async def store_image(image):
     storage.put_data(img_id,img_data)
     return img_id
 
-# @hueyrun.task()
-# def store_image_file(img_data):
-#     img_id = str(uuid.uuid4())
-#     memcache_client.set(img_id, img_data)
-#     return img_id
-
 def new_job(job):
     jobs[job.id] = job
     running_jobs.append(job.id)
-
-# @app.post("/upload")
-# async def upload_image(file: UploadFile = File(...)):
-#     serialized_image = await serialize_image(file)
-#     job = store_image_file.send(serialized_image)
-#     new_job(job)
-#     return {"job_id": job.message_id}
 
 @app.get("/plugins/reload")
 async def reload_plugins():
@@ -176,7 +144,7 @@ def set_plugin_config(plugin_name: str, config: dict):
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
-@hueyrun.task()
+@huey.task()
 def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
@@ -246,6 +214,15 @@ def stop_plugin(plugin_name: str):
 async def shutdown_event():
     for plugin_name in process_ids.keys():
         stop_plugin(plugin_name)
+    
+    if os.path.exists("huey"):
+        shutil.rmtree("huey")
+    if os.path.exists("huey_storage"):
+        shutil.rmtree("huey_storage")
+    if os.path.exists("huey.db"):
+        os.remove("huey.db")
+    if os.path.exists("huey_storage.db"):
+        os.remove("huey_storage.db")
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
