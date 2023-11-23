@@ -16,7 +16,6 @@ import importlib
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
-
 global port_mapping
 global plugin_endpoints
 global storage_dictionary
@@ -78,6 +77,7 @@ def load_plugins():
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
                 continue
+            # module = importlib.import_module(f".{folder}.plugin", package=PLUGINS_DIRECTORY)
             if "plugin.py" not in os.listdir(os.path.join(PLUGINS_DIRECTORY, folder)):
                 continue
             plugin_list.append(folder)
