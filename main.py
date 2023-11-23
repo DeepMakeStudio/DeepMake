@@ -77,7 +77,6 @@ def load_plugins():
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
                 continue
-            # module = importlib.import_module(f".{folder}.plugin", package=PLUGINS_DIRECTORY)
             if "plugin.py" not in os.listdir(os.path.join(PLUGINS_DIRECTORY, folder)):
                 continue
             plugin_list.append(folder)
@@ -206,7 +205,6 @@ def stop_plugin(plugin_name: str):
         for child in parent.children(recursive=True):  # or parent.children() for recursive=False
             child.kill()
         parent.kill()
-        # os.kill(pid, signal.SIGKILL)
         
     return f"{plugin_name} stopped"
 
@@ -262,17 +260,15 @@ def plugin_callback(plugin_name: str, status: str):
     print(f"Callback received for plugin: {plugin_name}. Current state: {current_state}")
 
     if status:
-        if current_state == "STARTING":
-            plugin_states[plugin_name] = "RUNNING"
-            print(f"{plugin_name} is now in RUNNING state")
-            return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
+        plugin_states[plugin_name] = "RUNNING"
+        print(f"{plugin_name} is now in RUNNING state")
+        return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
     else:
         print(f"{plugin_name} failed to start")
         plugin_states.pop(plugin_name)
         return {"status": "error", "message": f"{plugin_name} failed to start"}
     return {"status": "error", "message": f"{plugin_name} wasn't in the STARTING state or doesn't exist"}
 
-#we may need another plugin to get_jobs, you can't in rabbit or dramatiq
 @app.get("/plugins/get_jobs")
 def get_running_jobs():
     for job in running_jobs:
@@ -299,13 +295,6 @@ def move_job(job_id):
 
 @app.get("/job/{job_id}")
 def get_job(job_id: str):
-    # if job is None:
-    #     return {"status": "Job not found"}
-    # if job.result is None:
-    #     return {"status": "Job in progress"}
-
-    # Add more specificity TODO
-    # ResultMissing, ResultFailure
     print("getting job")
     try:
         job = jobs[job_id]
@@ -329,28 +318,3 @@ async def upload_img(file: UploadFile = File(...)):
     # serialized_image = await serialize_image(file)
     image_id = await store_image(file)
     return {"status": "Success", "image_id": image_id}
-
-# @app.get("/retrieve/{img_id}")
-# async def retrieve_image(img_id: str):
-
-#     img_data = fetch_image(img_id)
-#     if img_data is None:
-#         print("no image found")
-#         return {"status": "Image not found."}
-
-#     return {"status": "Job completed", "image": base64.b64encode(img_data).decode()}
-
-
-# @app.get("/get_list")
-# def do():
-#     job = count_words.send()
-#     jobs[job.message_id] = job
-#     return job.message_id
-
-# @dramatiq.actor(store_results=True)
-# def count_words():
-#     r = requests.get("http://127.0.0.1:" + str(8000) + "/plugins/get_list/", timeout=120)
-#     # response = requests.get(url)
-#     # count = len(response.text.split(" "))
-#     # print(f"There are {count} words at {url!r}.")
-#     return r.json()
