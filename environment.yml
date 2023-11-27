@@ -3,7 +3,7 @@ channels:
   - defaults
 dependencies:
   - pip
-  - python
+  - python=3.10
   - pip:
       - anyio
       - click
@@ -21,3 +21,4 @@ dependencies:
       - sniffio
       - starlette
       - uvicorn
+      - psutil
