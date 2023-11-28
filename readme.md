@@ -9,11 +9,11 @@ This repo contains the backend for DeepMake software.  It requires host plugins 
 * Install Anaconda from [here](https://www.anaconda.com/download)
 * From the DeepMake folder, 
     * Run "conda env create -f environment.yml"
-    * Run "conda env create -f plugin/Diffusers/environment.yml"
 ## Install any processing plugins you want.
 * go to the DeepMake folder
 * cd to plugin
 * git clone any processing plugins that you want to download (I.E. `git clone https://github.com/DeepMakeStudio/Diffusers`)
+    * Run `conda env create -f plugin/{folder}/environment.yml` for each package in the plugin folder.  (I.E. `conda env create -f plugin/Diffusers/environment.yml`)
 ## Install the Host plugins you desire:
 * Windows
     * After Effects:
