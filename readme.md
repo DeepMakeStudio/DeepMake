@@ -26,8 +26,8 @@ This repo contains the backend for DeepMake software.  It requires host plugins 
     * After Effects:
         * Download the [Binaries_Mac.zip](https://github.com/DeepMakeStudio/DeepMake/releases/download/0.1.0-alpha/Binaries_Mac.zip) file.
         * From that zip file
-            * Install DeepMake_ae.aex to your After Effects plugin folder (`/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/`)
-            * Install appPrompt.app to the following folder `/Applications/```
+            * Install DeepMake_ae.bundle to your After Effects plugin folder (`/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/`)
+            * Install appPrompt.app to the following folder `/Applications/`
     * Nuke: Coming Soon
 
 Congratulations!  You've installed DeepMake.  You can add new processing plugins as they become available.
@@ -35,6 +35,12 @@ Congratulations!  You've installed DeepMake.  You can add new processing plugins
 # Usage
 
 Now that you've completed installation you're ready to use DeepMake
+
+First run the backend.
+
+* Open an Anaconda Prompt in your DeepMake folder.
+* Run `python startup.py`
+* Confirm the backend started successfully, then open the host plugin.
 
 ## After Effects
 
