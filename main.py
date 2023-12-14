@@ -18,7 +18,6 @@ from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
 
-
 global port_mapping
 global plugin_endpoints
 global storage_dictionary
@@ -163,10 +162,10 @@ def set_plugin_config(plugin_name: str, config: dict):
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
     if plugin_name not in plugin_info.keys():
         get_plugin_info(plugin_name)
-    plugin_states[plugin_name] = "STARTING"
 
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
+    plugin_states[plugin_name] = "STARTING"
     if port is None:
         port = np.random.randint(min_port,max_port)
         while port in list(port_mapping.values()):
@@ -213,6 +212,7 @@ async def shutdown_event():
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
+    print(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
     if plugin_name not in port_mapping.keys():
