@@ -3,9 +3,18 @@ import uuid
 import requests
 from huey.storage import FileStorage, SqliteStorage
 import huey
+import os
+import sys
 
-# storage = FileStorage("storage", path='huey_storage')
-storage = SqliteStorage(name="storage", filename='huey_storage.db')
+if sys.platform == "win32":
+    storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
+elif sys.platform == "darwin":
+    storage_folder = os.path.join(os.getenv('HOME'),"Library","Application Support","DeepMake")
+
+if not os.path.exists(storage_folder):
+    os.mkdir(storage_folder)
+
+storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)

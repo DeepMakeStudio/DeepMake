@@ -24,18 +24,24 @@ global storage_dictionary
 
 app = FastAPI()
 
-storage = SqliteStorage(name="storage", filename='huey_storage.db')
+if sys.platform == "win32":
+    storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
+elif sys.platform == "darwin":
+    storage_folder = os.path.join(os.getenv('HOME'),"Library","Application Support","DeepMake")
 
-huey = SqliteHuey(filename='huey.db')
+if not os.path.exists(storage_folder):
+    os.mkdir(storage_folder)
+
+storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
+
+huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 
 app = FastAPI()
 client = requests.Session()
 
-
 port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
-
 
 PLUGINS_DIRECTORY = "plugin"
 
@@ -201,14 +207,14 @@ async def shutdown_event():
     for plugin_name in process_ids.keys():
         stop_plugin(plugin_name)
     
-    if os.path.exists("huey"):
-        shutil.rmtree("huey")
-    if os.path.exists("huey_storage"):
-        shutil.rmtree("huey_storage")
-    if os.path.exists("huey.db"):
-        os.remove("huey.db")
-    if os.path.exists("huey_storage.db"):
-        os.remove("huey_storage.db")
+    if os.path.exists(os.path.join(storage_folder, "huey")):
+        shutil.rmtree(os.path.join(storage_folder, "huey"))
+    if os.path.exists(os.path.join(storage_folder, "huey_storage")):
+        shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
+    if os.path.exists(os.path.join(storage_folder, "huey.db")):
+        os.remove(os.path.join(storage_folder, "huey.db"))
+    if os.path.existsos.path.join(storage_folder, ("huey_storage.db")):
+        os.remove(os.path.join(storage_folder, "huey_storage.db"))
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
