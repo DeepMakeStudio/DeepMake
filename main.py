@@ -221,7 +221,7 @@ async def shutdown_event():
         shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
     if os.path.exists(os.path.join(storage_folder, "huey.db")):
         os.remove(os.path.join(storage_folder, "huey.db"))
-    if os.path.existsos.path.join(storage_folder, ("huey_storage.db")):
+    if os.path.exists(os.path.join(storage_folder, "huey_storage.db")):
         os.remove(os.path.join(storage_folder, "huey_storage.db"))
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
