@@ -17,6 +17,8 @@ from time import sleep
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
+import threading
+
 
 global port_mapping
 global plugin_endpoints
@@ -38,6 +40,11 @@ plugin_endpoints = {}
 
 
 PLUGINS_DIRECTORY = "plugin"
+
+
+# New states for plugin initialization
+INITIALIZING = "INITIALIZING"
+READY = "READY"
 
 class Task(BaseModel):
     id: str
@@ -75,7 +82,8 @@ def startup():
     plugin_list = []
     load_plugins()
     global plugin_states
-    plugin_states = {plugin: "INIT" for plugin in plugin_list}
+    plugin_states = {plugin: "INITIALIZING" for plugin in plugin_list}
+
 
 def load_plugins():
     for folder in os.listdir(PLUGINS_DIRECTORY):
@@ -109,6 +117,7 @@ async def store_image(image):
 def new_job(job):
     jobs[job.id] = job
     running_jobs.append(job.id)
+
 
 @app.get("/plugins/reload")
 async def reload_plugins():
@@ -215,6 +224,9 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
     print(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
+    # Check if the plugin is ready before proceeding
+    if plugin_states.get(plugin_name) != "RUNNING":
+        return {"status": "Error", "message": "Plugin is not ready. Please try again later."}
     if plugin_name not in port_mapping.keys():
         print(f"{plugin_name} not yet started, starting now")
         await start_plugin(plugin_name)
@@ -239,6 +251,11 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
 
 @huey.task()
 def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
+    # Check if the plugin is ready
+    #while plugin_states.get(plugin_name) != READY:
+        #sleep(5)  # Wait and check again
+    while plugin_states[plugin_name] == "STARTING":
+        sleep(5)
     result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
     counter = 0
     while result[plugin_name]["state"] != "RUNNING":

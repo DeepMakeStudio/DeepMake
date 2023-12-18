@@ -31,6 +31,7 @@ class Plugin():
         self.plugin = arguments.plugin
         self.config = arguments.config
         self.endpoints = arguments.endpoints
+        self.plugin_states = {}  # Initialize the plugin_states dictionary
 
     def plugin_info(self):
         """ int: The number of samples to take from the input video/images """
