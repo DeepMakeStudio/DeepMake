@@ -18,6 +18,8 @@ from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
 
+CONDA = True
+
 global port_mapping
 global plugin_endpoints
 global storage_dictionary
@@ -181,10 +183,16 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     port_mapping[plugin_name] = str(port)
     conda_env = plugin_info[plugin_name]["plugin"]["env"]
     if sys.platform != "win32":
-        p = subprocess.Popen(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split())
+        if CONDA:
+            p = subprocess.Popen(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split())
+        else:
+            p = subprocess.Popen(f"envs\plugins\python -m uvicorn plugin.{plugin_name}.plugin:app --port {port}".split())
     else:
-        conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
-        p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+        if CONDA:
+            conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
+            p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+        else:
+            p = subprocess.Popen(f"envs\plugins\python.exe -m uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
     pid = p.pid
     process_ids[plugin_name] = pid
 
