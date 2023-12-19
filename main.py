@@ -25,11 +25,12 @@ global storage_dictionary
 
 app = FastAPI()
 
-storage_folder = "storage"
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
 elif sys.platform == "darwin":
     storage_folder = os.path.join(os.getenv('HOME'),"Library","Application Support","DeepMake")
+elif sys.platform == "linux":
+    storage_folder = os.path.join(os.getenv('HOME'),".local", "DeepMake")
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
@@ -214,7 +215,7 @@ def stop_plugin(plugin_name: str):
         
     return f"{plugin_name} stopped"
 
-@app.get("/shutdown_main")
+@app.get("/backend/shutdown")
 def shutdown():
     stop_plugin("main")
 
