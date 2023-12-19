@@ -17,7 +17,6 @@ from time import sleep
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
-
 CONDA = True
 
 global port_mapping
@@ -26,6 +25,7 @@ global storage_dictionary
 
 app = FastAPI()
 
+storage_folder = "storage"
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
 elif sys.platform == "darwin":
@@ -76,6 +76,10 @@ def fetch_image(img_id):
     if img_data == EmptyData:
         raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
     return img_data
+
+@app.get("/get_main_pid/{pid}")
+def get_main_pid(pid):
+    process_ids["main"] = int(pid)
 
 @app.on_event("startup")
 def startup():
@@ -209,6 +213,10 @@ def stop_plugin(plugin_name: str):
         parent.kill()
         
     return f"{plugin_name} stopped"
+
+@app.get("/shutdown_main")
+def shutdown():
+    stop_plugin("main")
 
 @app.on_event("shutdown")
 async def shutdown_event():
