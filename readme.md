@@ -19,14 +19,14 @@ This repo contains the backend for DeepMake software.  It requires host plugins 
 ## Install the Host plugins you desire:
 * Windows
     * After Effects:
-        * Download the [Binaries_Win.zip](https://github.com/DeepMakeStudio/DeepMake/releases/download/0.1.0-alpha/Binaries_Win.zip) file.
+        * Download the [Binaries_Win.zip](https://github.com/DeepMakeStudio/DeepMake/releases/download/0.1.1-alpha/Binaries_Win.zip) file.
         * From that zip file
             * Install DeepMake_ae.aex to your After Effects plugin folder (`C:\Program Files\Adobe\Common\Plug-ins\7.0\MediaCore\`)
             * Install appPrompt.exe to the following folder (You may need to make the folder to put the file in) `C:\Program Files\DeepMake\Prompt\bin\appPrompt.exe`
     * Nuke: Coming Soon
 * Mac:
     * After Effects:
-        * Download the [Binaries_Mac.zip](https://github.com/DeepMakeStudio/DeepMake/releases/download/0.1.0-alpha/Binaries_Mac.zip) file.
+        * Download the [Binaries_Mac.zip](https://github.com/DeepMakeStudio/DeepMake/releases/download/0.1.1-alpha/Binaries_Mac.zip) file.
         * From that zip file
             * Install DeepMake_ae.bundle to your After Effects plugin folder (`/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/`)
             * Install appPrompt.app to the following folder `/Applications/`
