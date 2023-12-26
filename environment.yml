@@ -16,6 +16,7 @@ dependencies:
       - pymemcache
       - python-multipart
       - requests
+      - sentry-sdk[fastapi]
       - sniffio
       - starlette
       - uvicorn
