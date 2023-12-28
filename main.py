@@ -5,6 +5,8 @@ from datetime import datetime
 import shutil
 import time
 import re
+from PIL import Image
+from io import BytesIO
 
 import os
 import base64
@@ -33,6 +35,8 @@ if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
 elif sys.platform == "darwin":
     storage_folder = os.path.join(os.getenv('HOME'),"Library","Application Support","DeepMake")
+elif sys.platform == "linux":
+    storage_folder = os.path.join(os.getenv('HOME'),".local", "DeepMake")
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
@@ -113,11 +117,21 @@ async def serialize_image(image):
     img_data = image.decode()
     return img_data
 
-async def store_image(image):
-    img_data = await image.read()
+async def store_image(data):
+    if isinstance(data, list):
+        img_data = []
+        for image in data:
+            image_bytes = await image.read()
+            img_data.append(Image.open(BytesIO(image_bytes)))
+        print(np.array(img_data).shape)
+        img_data = np.array(img_data).tobytes()
+
+    else:
+        img_data = await data.read()
     img_id = str(uuid.uuid4())
     storage.put_data(img_id,img_data)
     return img_id
+
 def available_gpu_memory():
     command = "nvidia-smi --query-gpu=memory.free --format=csv"
     memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
@@ -395,4 +409,9 @@ async def get_img(img_id: str):
 async def upload_img(file: UploadFile = File(...)):
     # serialized_image = await serialize_image(file)
     image_id = await store_image(file)
+    return {"status": "Success", "image_id": image_id}
+
+@app.post("/image/upload_multiple")
+async def upload_img(files: list[UploadFile]):
+    image_id = await store_image(files)
     return {"status": "Success", "image_id": image_id}
