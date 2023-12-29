@@ -118,16 +118,7 @@ async def serialize_image(image):
     return img_data
 
 async def store_image(data):
-    if isinstance(data, list):
-        img_data = []
-        for image in data:
-            image_bytes = await image.read()
-            img_data.append(Image.open(BytesIO(image_bytes)))
-        print(np.array(img_data).shape)
-        img_data = np.array(img_data).tobytes()
-
-    else:
-        img_data = await data.read()
+    img_data = await data.read()
     img_id = str(uuid.uuid4())
     storage.put_data(img_id,img_data)
     return img_id
@@ -412,6 +403,19 @@ async def upload_img(file: UploadFile = File(...)):
     return {"status": "Success", "image_id": image_id}
 
 @app.post("/image/upload_multiple")
-async def upload_img(files: list[UploadFile]):
-    image_id = await store_image(files)
+async def upload_images(files: list[UploadFile]):
+    image_id = await store_multiple_images(files)
     return {"status": "Success", "image_id": image_id}
+
+async def store_multiple_images(data):
+    img_data = []
+    for image in data:
+        image_bytes = await image.read()
+        img_data.append(Image.open(BytesIO(image_bytes)))
+    shape = np.array(img_data).shape
+    img_data = np.array(img_data).tobytes()
+    img_id = str(uuid.uuid4())
+    shape_id = img_id + "_shape"
+    storage.put_data(img_id,img_data)
+    storage.put_data(shape_id, np.array(shape).tobytes())
+    return img_id

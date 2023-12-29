@@ -5,6 +5,7 @@ from huey.storage import FileStorage, SqliteStorage
 import huey
 import os
 import sys
+import numpy as np
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -30,6 +31,16 @@ def store_image(img_data, img_id=None):
     if not isinstance(img_data, bytes):
         raise HTTPException(status_code=400, detail=f"Data must be stored in bytes")
     storage.put_data(img_id, img_data)
+    return img_id
+
+def store_multiple_images(img_data):
+    shape = np.array(img_data).shape
+    print(shape, np.array(shape).dtype)
+    img_data = np.array(img_data).tobytes()
+    img_id = str(uuid.uuid4())
+    shape_id = img_id + "_shape"
+    storage.put_data(img_id,img_data)
+    storage.put_data(shape_id, np.array(shape).tobytes())
     return img_id
 
 class Plugin():
