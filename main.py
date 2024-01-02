@@ -17,19 +17,19 @@ from time import sleep
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
-import sentry_sdk
+# import sentry_sdk
 
 CONDA = True
 
-sentry_sdk.init(
-    dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
-    traces_sample_rate=0.1,
-    profiles_sample_rate=0.1,
-    enable_tracing=True,
-    integrations=[
-        HueyIntegration(),
-    ],
-)
+# sentry_sdk.init(
+#     dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
+#     traces_sample_rate=0.1,
+#     profiles_sample_rate=0.1,
+#     enable_tracing=True,
+#     integrations=[
+#         HueyIntegration(),
+#     ],
+# )
 
 global port_mapping
 global plugin_endpoints
@@ -41,6 +41,8 @@ if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
 elif sys.platform == "darwin":
     storage_folder = os.path.join(os.getenv('HOME'),"Library","Application Support","DeepMake")
+elif sys.platform == "linux":
+    storage_folder = os.path.join(os.getenv('HOME'),".local", "DeepMake")
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
