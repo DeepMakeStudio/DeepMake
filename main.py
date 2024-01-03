@@ -266,24 +266,6 @@ def stop_plugin(plugin_name: str):
             plugin_states[plugin_name] = "STOPPED"
         
     return f"{plugin_name} stopped"
-
-@app.get("/backend/shutdown")
-def shutdown():
-    stop_plugin("main")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    for plugin_name in process_ids.keys():
-        stop_plugin(plugin_name)
-    
-    if os.path.exists(os.path.join(storage_folder, "huey")):
-        shutil.rmtree(os.path.join(storage_folder, "huey"))
-    if os.path.exists(os.path.join(storage_folder, "huey_storage")):
-        shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
-    if os.path.exists(os.path.join(storage_folder, "huey.db")):
-        os.remove(os.path.join(storage_folder, "huey.db"))
-    if os.path.exists(os.path.join(storage_folder, "huey_storage.db")):
-        os.remove(os.path.join(storage_folder, "huey_storage.db"))
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
@@ -383,6 +365,24 @@ def get_running_jobs():
             elif isinstance(e, ResultFailure):
                 move_job(job)
     return {"running_jobs": running_jobs, "finished_jobs": finished_jobs}
+
+@app.get("/backend/shutdown")
+def shutdown():
+    stop_plugin("main")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    for plugin_name in list(process_ids.keys()):
+        stop_plugin(plugin_name)
+    
+    if os.path.exists(os.path.join(storage_folder, "huey")):
+        shutil.rmtree(os.path.join(storage_folder, "huey"))
+    if os.path.exists(os.path.join(storage_folder, "huey_storage")):
+        shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
+    if os.path.exists(os.path.join(storage_folder, "huey.db")):
+        os.remove(os.path.join(storage_folder, "huey.db"))
+    if os.path.exists(os.path.join(storage_folder, "huey_storage.db")):
+        os.remove(os.path.join(storage_folder, "huey_storage.db"))
 
 @app.put("/job")
 def add_job(job: Job):
