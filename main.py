@@ -23,6 +23,7 @@ from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
 import sentry_sdk
+from sentry_sdk.integrations.huey import HueyIntegration        
 CONDA = True
 
 sentry_sdk.init(
