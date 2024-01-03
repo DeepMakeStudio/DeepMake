@@ -18,7 +18,6 @@ from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
 import sentry_sdk
-
 CONDA = True
 
 sentry_sdk.init(
@@ -41,6 +40,8 @@ if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
 elif sys.platform == "darwin":
     storage_folder = os.path.join(os.getenv('HOME'),"Library","Application Support","DeepMake")
+elif sys.platform == "linux":
+    storage_folder = os.path.join(os.getenv('HOME'),".local", "DeepMake")
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
@@ -87,6 +88,10 @@ def fetch_image(img_id):
     if img_data == EmptyData:
         raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
     return img_data
+
+@app.get("/get_main_pid/{pid}")
+def get_main_pid(pid):
+    process_ids["main"] = int(pid)
 
 @app.on_event("startup")
 def startup():
@@ -220,6 +225,10 @@ def stop_plugin(plugin_name: str):
         parent.kill()
         
     return f"{plugin_name} stopped"
+
+@app.get("/backend/shutdown")
+def shutdown():
+    stop_plugin("main")
 
 @app.on_event("shutdown")
 async def shutdown_event():
