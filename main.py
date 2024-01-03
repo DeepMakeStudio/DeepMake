@@ -3,6 +3,11 @@ from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
 import shutil
+import time
+import re
+from PIL import Image
+from io import BytesIO
+
 import os
 import base64
 import uuid
@@ -56,6 +61,7 @@ client = requests.Session()
 port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
+plugin_memory = {"stable_diffusion": 4000, "bisenet": 400, "detection": 700, "landmarking": 700, "swap_face": 0, "baseline": 0}
 
 PLUGINS_DIRECTORY = "plugin"
 
@@ -80,6 +86,7 @@ jobs = {}
 finished_jobs = []
 running_jobs = []
 jobs = {}
+most_recent_use = []
 
 plugin_info = {}
 
@@ -124,11 +131,29 @@ async def serialize_image(image):
     img_data = image.decode()
     return img_data
 
-async def store_image(image):
-    img_data = await image.read()
+async def store_image(data):
+    img_data = await data.read()
     img_id = str(uuid.uuid4())
     storage.put_data(img_id,img_data)
     return img_id
+
+def available_gpu_memory():
+    command = "nvidia-smi --query-gpu=memory.free --format=csv"
+    memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
+    memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
+    return np.sum(memory_free_values)
+
+def mac_gpu_memory():
+    vm = subprocess.Popen(['vm_stat'], stdout=subprocess.PIPE).communicate()[0].decode()
+    vmLines = vm.split('\n')
+    sep = re.compile(':[\s]+')
+    vmStats = {}
+    page_size = int(vmLines[0].split(" ")[-2])
+    for row in range(1,len(vmLines)-2):
+        rowText = vmLines[row].strip()
+        rowElements = sep.split(rowText)
+        vmStats[(rowElements[0])] = int(rowElements[1].strip("\.")) * page_size /1024**2
+    return vmStats["Pages free"] + vmStats["Pages inactive"]
 
 def new_job(job):
     jobs[job.id] = job
@@ -184,6 +209,17 @@ def set_plugin_config(plugin_name: str, config: dict):
 
 @app.get("/plugins/start_plugin/{plugin_name}")
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
+    if sys.platform != "darwin":
+        memory_func = available_gpu_memory
+    else:
+        memory_func = mac_gpu_memory
+    
+    available_memory = memory_func()
+    while plugin_memory[plugin_name] > available_memory:
+        plugin_to_shutdown = most_recent_use.pop()
+        stop_plugin(plugin_to_shutdown)
+        time.sleep(1)
+        available_memory = memory_func() 
     if plugin_name not in plugin_info.keys():
         get_plugin_info(plugin_name)
 
@@ -223,6 +259,10 @@ def stop_plugin(plugin_name: str):
         for child in parent.children(recursive=True):  # or parent.children() for recursive=False
             child.kill()
         parent.kill()
+        process_ids.pop(plugin_name)
+        if plugin_name != "huey":
+            port_mapping.pop(plugin_name)
+            plugin_states[plugin_name] = "STOPPED"
         
     return f"{plugin_name} stopped"
 
@@ -265,7 +305,11 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
         if input not in plugin_endpoints[plugin_name][endpoint]['inputs'].keys():
             warnings.append(f"Input '{input}' not used by endpoint '{endpoint}'")
             del json_data[input]
+    
     job = huey_call_endpoint(plugin_name, endpoint, json_data, port_mapping, plugin_endpoints)
+    if plugin_name in most_recent_use:
+        most_recent_use.remove(plugin_name)
+    most_recent_use.insert(0, plugin_name)
     if warnings != []:
         return {"job_id": job.id, "warnings": warnings}
     new_job(job)
@@ -375,3 +419,21 @@ async def upload_img(file: UploadFile = File(...)):
     # serialized_image = await serialize_image(file)
     image_id = await store_image(file)
     return {"status": "Success", "image_id": image_id}
+
+@app.post("/image/upload_multiple")
+async def upload_images(files: list[UploadFile]):
+    image_id = await store_multiple_images(files)
+    return {"status": "Success", "image_id": image_id}
+
+async def store_multiple_images(data):
+    img_data = []
+    for image in data:
+        image_bytes = await image.read()
+        img_data.append(Image.open(BytesIO(image_bytes)))
+    shape = np.array(img_data).shape
+    img_data = np.array(img_data).tobytes()
+    img_id = str(uuid.uuid4())
+    shape_id = img_id + "_shape"
+    storage.put_data(img_id,img_data)
+    storage.put_data(shape_id, np.array(shape).tobytes())
+    return img_id
