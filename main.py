@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Response
+from fastapi.responses import RedirectResponse
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
@@ -45,8 +46,6 @@ sentry_sdk.set_tag("platform", sys.platform)
 global port_mapping
 global plugin_endpoints
 global storage_dictionary
-
-app = FastAPI()
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -165,6 +164,10 @@ def mac_gpu_memory():
 def new_job(job):
     jobs[job.id] = job
     running_jobs.append(job.id)
+
+@app.get("/")
+async def redirect_docs():
+    return RedirectResponse("/docs/")
 
 @app.get("/plugins/reload")
 async def reload_plugins():
