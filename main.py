@@ -349,19 +349,18 @@ def get_plugin_status(plugin_name: str):
 
 @app.post("/plugin_callback/{plugin_name}/{status}")
 def plugin_callback(plugin_name: str, status: str):
-    status = status == "True"
+    running = status == "True"
     current_state = plugin_states.get(plugin_name)
     print(f"Callback received for plugin: {plugin_name}. Current state: {current_state}")
 
-    if status:
+    if running:
         plugin_states[plugin_name] = "RUNNING"
         print(f"{plugin_name} is now in RUNNING state")
         return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
     else:
         print(f"{plugin_name} failed to start")
         plugin_states.pop(plugin_name)
-        return {"status": "error", "message": f"{plugin_name} failed to start"}
-    return {"status": "error", "message": f"{plugin_name} wasn't in the STARTING state or doesn't exist"}
+        return {"status": "error", "message": f"{plugin_name} failed to start because {status}"}
 
 @app.get("/plugins/get_jobs")
 def get_running_jobs():
