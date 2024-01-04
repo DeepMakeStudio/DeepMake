@@ -335,7 +335,7 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
 
     url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
 
-    response = client.get(url, timeout=10).json()
+    response = client.get(url, timeout=240).json()
     return response
 
 @app.get("/plugin/status/")
