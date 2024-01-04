@@ -69,8 +69,15 @@ class Plugin():
             #     return response
         return self.config 
     
-    def notify_main_system_of_startup(self, status: str):
-        callback_url = f"http://localhost:8000/plugin_callback/{self.plugin_name}/{status}"
+    def notify_main_system_of_startup(self, status: str, error: Exception = None):
+        if status == "True":
+            message = "True"
+        else:
+            if isinstance(error, RuntimeError) and "out of memory" in str(error):
+                message = "there is not enough memory to load"
+            else:
+                message = "of unknown error"
+        callback_url = f"http://localhost:8000/plugin_callback/{self.plugin_name}/{message}"
         try:
             response = requests.post(callback_url)
             print("Response from main system:", response.json())  # Print the response content
