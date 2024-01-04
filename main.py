@@ -23,8 +23,12 @@ from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
 import sentry_sdk
-from sentry_sdk.integrations.huey import HueyIntegration        
+from sentry_sdk.integrations.huey import HueyIntegration
+from hashlib import md5    
 CONDA = True
+
+def get_id(): # return md5 hash of uuid.getnode()
+    return md5(str(uuid.getnode()).encode()).hexdigest()
 
 sentry_sdk.init(
     dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
@@ -35,6 +39,8 @@ sentry_sdk.init(
         HueyIntegration(),
     ],
 )
+sentry_sdk.set_user({"id": get_id()})
+sentry_sdk.set_tag("platform", sys.platform)
 
 global port_mapping
 global plugin_endpoints
@@ -62,7 +68,7 @@ client = requests.Session()
 port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
-plugin_memory = {"stable_diffusion": 4000, "bisenet": 400, "detection": 700, "landmarking": 700, "swap_face": 0, "baseline": 0}
+plugin_memory = {"Diffusers": 4000, "Bisenet": 400, "Baseline": 0}
 
 PLUGINS_DIRECTORY = "plugin"
 
@@ -326,7 +332,7 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
 
     url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
 
-    response = client.get(url, timeout=120).json()
+    response = client.get(url, timeout=10).json()
     return response
 
 @app.get("/plugin/status/")
@@ -406,9 +412,9 @@ def get_job(job_id: str):
     except Exception as e:
         if isinstance(e, KeyError):
             return {"status": "Job not found"}
-    print("moving job")
+    # print("moving job")
     move_job(job_id)
-    print("found job")
+    # print("found job")
     return job()
 
 @app.get("/image/get/{img_id}")
