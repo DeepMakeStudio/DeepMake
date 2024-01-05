@@ -167,7 +167,11 @@ def get_plugin_list():
 @app.get("/plugins/get_info/{plugin_name}")
 def get_plugin_info(plugin_name: str):
     if plugin_name in plugin_list: 
-        if plugin_name not in plugin_info.keys():
+        if plugin_states[plugin_name] == "RUNNING":
+            port = port_mapping[plugin_name]
+            r = client.get("http://127.0.0.1:" + port + "/get_info")
+            plugin_info[plugin_name] = r.json()
+        elif plugin_name not in plugin_info.keys():
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
@@ -195,20 +199,21 @@ def set_plugin_config(plugin_name: str, config: dict):
 
 @app.get("/plugins/start_plugin/{plugin_name}")
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
+    # if plugin_name not in plugin_info.keys():
+    get_plugin_info(plugin_name)
+
     if sys.platform != "darwin":
         memory_func = available_gpu_memory
     else:
         memory_func = mac_gpu_memory
     
     available_memory = memory_func()
-    while plugin_memory[plugin_name] > available_memory:
+    while plugin_info[plugin_name]["plugin"]["memory_usage"] > available_memory:
         plugin_to_shutdown = most_recent_use.pop()
         stop_plugin(plugin_to_shutdown)
         time.sleep(1)
         available_memory = memory_func() 
-    if plugin_name not in plugin_info.keys():
-        get_plugin_info(plugin_name)
-
+    
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
     plugin_states[plugin_name] = "STARTING"
