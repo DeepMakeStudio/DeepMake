@@ -104,7 +104,10 @@ def fetch_image(img_id):
 
 @app.get("/get_main_pid/{pid}")
 def get_main_pid(pid):
+    if main in process_ids:
+        return {"status": "failed", "error": "Already received a pid"}
     process_ids["main"] = int(pid)
+    return {"status": "success"}
 
 @app.on_event("startup")
 def startup():
