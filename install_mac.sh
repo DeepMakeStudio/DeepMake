@@ -42,12 +42,12 @@ fi
 $conda_path env create -y -f $install_path/environment.yml
 
 #Download binaries
-curl -s -L https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Binaries_Mac.zip -o $TMP_DIR/Binaries_Mac.zip
+curl -s -L https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Binaries_Mac.zip -o "$TMP_DIR"/Binaries_Mac.zip
 
 
-unzip -o $TMP_DIR/Binaries_Mac.zip -d $TMP_DIR
-cp -Rf $TMP_DIR/DeepMake/DeepMake_ae.bundle $aeplugin_path
-cp -Rf $TMP_DIR/DeepMake/appPrompt.app /Applications/
+unzip -o "$TMP_DIR"/Binaries_Mac.zip -d "$TMP_DIR"
+cp -Rf "$TMP_DIR"/DeepMake/DeepMake_ae.bundle "$aeplugin_path"
+cp -Rf "$TMP_DIR"/DeepMake/appPrompt.app /Applications/
 
 rm -Rf $TMP_DIR
 

@@ -6,7 +6,7 @@ DeepMake uses generative AI make content creation fast and easy. We leverage the
 
 # Support
 
-For support see [DeepMake.com](https://deepmake.com/) or [![Join our Discord server](images/Discord.png)](https://discord.gg/Cy4zAXF8)
+For support see [DeepMake.com](https://deepmake.com/) or [![Join our Discord server](images/Discord.png)](https://discord.gg/E6T5t7mE8T)
 
 # DeepMake Backend
 
@@ -15,18 +15,29 @@ This repo contains the backend for DeepMake software.  It requires host plugins 
 # Installation
 
 ## Install the Deepmake Backend
+### Easy install
+
+#### MacOS (Apple Silicon only)
+For Mac OS we have an easy installer available.  Simply run
+
+`curl -s -L https://raw.githubusercontent.com/DeepMakeStudio/DeepMake/main/install_mac.sh -o install_mac.sh && sudo sh ./install_mac.sh`
+
+    It should handle all the installation steps for the backend and you can continue to [Install any processing plugins you want](#Install any processing plugins you want)
+
+### Manual Install
 * Clone this folder somewhere you can access it.
 * Install Anaconda from [here](https://www.anaconda.com/download)
 * From the DeepMake folder, 
     * Run "conda env create -f environment.yml"
-## Install any processing plugins you want.
+
+## Install any processing plugins you want
 * go to the DeepMake folder
 * cd to plugin
 * git clone any processing plugins that you want to download (I.E. `git clone https://github.com/DeepMakeStudio/Diffusers`)
     * Win: Run `conda env create -f plugin/{folder}/environment.yml` for each package in the plugin folder.  (I.E. `conda env create -f plugin/Diffusers/environment.yml`)
     * Mac: Run `conda env create -f plugin/{folder}/environment_mac.yml` for each package in the plugin folder.  (I.E. `conda env create -f plugin/Diffusers/environment_mac.yml`)
 
-## Install the Host plugins you desire:
+## Install the Host plugins you desire
 * Windows
     * After Effects:
         * Download the [Binaries_Win.zip](https://github.com/DeepMakeStudio/DeepMake/releases/download/0.1.1-alpha/Binaries_Win.zip) file.
@@ -63,6 +74,6 @@ Then you may choose from the installed plugins.  Each processing plugin will hav
 
 ## For more
 
-For more information or if you want to get more help see [DeepMake.com](https://deepmake.com/) or join our [Discord server](https://discord.gg/Cy4zAXF8)
+For more information or if you want to get more help see [DeepMake.com](https://deepmake.com/) or join our [Discord server](https://discord.gg/E6T5t7mE8T)
 
 New Guides, Videos, and tutorials will be released over time.
