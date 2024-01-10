@@ -1,6 +1,16 @@
+# DeepMake
+
+DeepMake uses generative AI make content creation fast and easy. We leverage the leading open source AI to give you VFX in a few clicks, create stock video from text prompts, instantly segment layers, and more.
+
+![Deepmake Logo](images/DeepMake.png)
+
+# Support
+
+For support see [DeepMake.com](https://deepmake.com/) or [![Join our Discord server](images/Discord.png)](https://discord.gg/Cy4zAXF8)
+
 # DeepMake Backend
 
-This repo contains the backend for DeepMake software.  It requires host plugins (Such as our After Effects plguin) as well as processing plugins (such as our Diffusers plugin for Text to Image generation)
+This repo contains the backend for DeepMake software.  It requires host plugins (Such as our After Effects plugin) as well as processing plugins (such as our Diffusers plugin for Text to Image generation)
 
 # Installation
 
@@ -51,8 +61,8 @@ To use DeepMake simply activate the plugin from Effects/DeepMake/AI Plugin Rende
 
 Then you may choose from the installed plugins.  Each processing plugin will have it's own settings for you to configure.  DeepMake automatically makes the options that each processning plugin use visibile for you to modify.
 
-## Support
+## For more
 
-For support see [DeepMake.com](https://deepmake.com/)
+For more information or if you want to get more help see [DeepMake.com](https://deepmake.com/) or join our [Discord server](https://discord.gg/Cy4zAXF8)
 
 New Guides, Videos, and tutorials will be released over time.
