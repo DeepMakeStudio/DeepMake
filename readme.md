@@ -22,7 +22,7 @@ For Mac OS we have an easy installer available.  Simply run
 
 `curl -s -L https://raw.githubusercontent.com/DeepMakeStudio/DeepMake/main/install_mac.sh -o install_mac.sh && sudo sh ./install_mac.sh`
 
-    It should handle all the installation steps for the backend and you can continue to [Install any processing plugins you want](#Install any processing plugins you want)
+It should handle all the installation steps for the backend and you can continue to [Install any processing plugins you want](#Install any processing plugins you want)
 
 #### Windows
 
