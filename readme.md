@@ -24,6 +24,14 @@ For Mac OS we have an easy installer available.  Simply run
 
     It should handle all the installation steps for the backend and you can continue to [Install any processing plugins you want](#Install any processing plugins you want)
 
+#### Windows
+
+Our installer for Windows is currently in Alpha and is unsigned. It includes a copy of Python which many antiviruses tag as malicious. To use it you may need to bypass your antivirus.
+
+[Download the Installer](https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Installer_Win.exe)
+
+If you're worried and don't want to override your antivirus you can do the manual install instead.
+
 ### Manual Install
 * Clone this folder somewhere you can access it.
 * Install Anaconda from [here](https://www.anaconda.com/download)
