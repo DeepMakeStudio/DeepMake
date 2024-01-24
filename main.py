@@ -25,7 +25,8 @@ from huey.storage import SqliteStorage
 from huey.constants import EmptyData
 import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
-from hashlib import md5    
+from hashlib import md5
+import sqlite3    
 CONDA = True
 
 def get_id(): # return md5 hash of uuid.getnode()
@@ -67,7 +68,7 @@ client = requests.Session()
 port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
-plugin_memory = {"Diffusers": 4000, "Bisenet": 400, "Baseline": 0}
+plugin_memory = {"Diffusers": 4000, "GroundingDINO": 3000, "Bisenet": 400, "Baseline": 0}
 
 PLUGINS_DIRECTORY = "plugin"
 
@@ -88,6 +89,9 @@ class Job(BaseModel):
     created_at: datetime = datetime.now()
     description: Optional[str] = None
 
+class Item(BaseModel):
+    value: str
+
 jobs = {}
 finished_jobs = []
 running_jobs = []
@@ -104,7 +108,7 @@ def fetch_image(img_id):
 
 @app.get("/get_main_pid/{pid}")
 def get_main_pid(pid):
-    if main in process_ids:
+    if "main" in process_ids:
         return {"status": "failed", "error": "Already received a pid"}
     process_ids["main"] = int(pid)
     return {"status": "success"}
@@ -116,6 +120,19 @@ def startup():
     load_plugins()
     global plugin_states
     plugin_states = {plugin: "INIT" for plugin in plugin_list}
+    init_db()  # Initialize the database
+
+def init_db():
+    conn = sqlite3.connect(os.path.join(storage_folder, 'huey_storage.db'))
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS key_value_store (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 def load_plugins():
     for folder in os.listdir(PLUGINS_DIRECTORY):
@@ -450,3 +467,32 @@ async def store_multiple_images(data):
     storage.put_data(img_id,img_data)
     storage.put_data(shape_id, np.array(shape).tobytes())
     return img_id
+
+@app.put("/data/store/{key}")
+async def store_data(key: str, item: Item):
+    conn = sqlite3.connect(os.path.join(storage_folder, 'huey_storage.db'))
+    cursor = conn.cursor()
+    cursor.execute("REPLACE INTO key_value_store (key, value) VALUES (?, ?)", (key, item.value))
+    conn.commit()
+    conn.close()
+    return {"message": "Data stored successfully"}
+
+@app.get("/data/retrieve/{key}")
+async def retrieve_data(key: str):
+    conn = sqlite3.connect(os.path.join(storage_folder, 'huey_storage.db'))
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM key_value_store WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"value": row[0]}
+    raise HTTPException(status_code=404, detail="Key not found")
+
+@app.delete("/data/delete/{key}")
+async def delete_data(key: str):
+    conn = sqlite3.connect(os.path.join(storage_folder, 'huey_storage.db'))
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM key_value_store WHERE key = ?", (key,))
+    conn.commit()
+    conn.close()
+    return {"message": "Data deleted successfully"}
