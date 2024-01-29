@@ -6,7 +6,7 @@ DeepMake uses generative AI make content creation fast and easy. We leverage the
 
 # Support
 
-For support see [DeepMake.com](https://deepmake.com/) or [![Join our Discord server](images/Discord.png)](https://discord.gg/E6T5t7mE8T)
+For support please [![Join our Discord server](images/Discord.png)](https://discord.gg/E6T5t7mE8T) or visit [our support page](https://deepmake.com/support).
 
 # DeepMake Backend
 
@@ -33,19 +33,15 @@ Our installer for Windows is currently in Alpha and is unsigned. It includes a c
 If you're worried and don't want to override your antivirus you can do the manual install instead.
 
 ### Manual Install
+For the most up-to-date instructions for manual installation, please see the [installation guide on our website](https://deepmake.com/install/#manual-installation)
+
+#### Backend Install
 * Clone this folder somewhere you can access it.
 * Install Anaconda from [here](https://www.anaconda.com/download)
 * From the DeepMake folder, 
     * Run "conda env create -f environment.yml"
 
-## Install any processing plugins you want
-* go to the DeepMake folder
-* cd to plugin
-* git clone any processing plugins that you want to download (I.E. `git clone https://github.com/DeepMakeStudio/Diffusers`)
-    * Win: Run `conda env create -f plugin/{folder}/environment.yml` for each package in the plugin folder.  (I.E. `conda env create -f plugin/Diffusers/environment.yml`)
-    * Mac: Run `conda env create -f plugin/{folder}/environment_mac.yml` for each package in the plugin folder.  (I.E. `conda env create -f plugin/Diffusers/environment_mac.yml`)
-
-## Install the Host plugins you desire
+#### Install the Host plugins you want
 * Windows
     * After Effects:
         * Download the [Binaries_Win.zip](https://github.com/DeepMakeStudio/DeepMake/releases/download/0.1.1-alpha/Binaries_Win.zip) file.
@@ -60,6 +56,13 @@ If you're worried and don't want to override your antivirus you can do the manua
             * Install DeepMake_ae.bundle to your After Effects plugin folder (`/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/`)
             * Install appPrompt.app to the following folder `/Applications/`
     * Nuke: Coming Soon
+
+#### Install any processing plugins you want
+* go to the DeepMake folder
+* cd to plugin
+* git clone any processing plugins that you want to download (I.E. `git clone https://github.com/DeepMakeStudio/Diffusers`)
+    * Win: Run `conda env create -f plugin/{folder}/environment.yml` for each package in the plugin folder.  (I.E. `conda env create -f plugin/Diffusers/environment.yml`)
+    * Mac: Run `conda env create -f plugin/{folder}/environment_mac.yml` for each package in the plugin folder.  (I.E. `conda env create -f plugin/Diffusers/environment_mac.yml`)
 
 Congratulations!  You've installed DeepMake.  You can add new processing plugins as they become available.
 
