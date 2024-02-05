@@ -6,6 +6,7 @@ import huey
 import os
 import sys
 import numpy as np
+import torch
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -42,6 +43,18 @@ def store_multiple_images(img_data):
     storage.put_data(img_id,img_data)
     storage.put_data(shape_id, np.array(shape).tobytes())
     return img_id
+
+def report_memory_usage(memory_history, plugin_data):
+    if torch.cuda.is_available():
+        memory_usage = torch.cuda.memory_allocated() / 2**20
+    elif torch.backends.mps.is_available():
+        memory_usage = torch.mps.current_allocated_memory() / 2**20
+    if len(memory_history) != 0:
+        model_mem = memory_history[0]
+        memory_history.append(memory_usage + model_mem)
+        plugin_data["memory_usage"] = np.mean(memory_history[1:])
+    else:
+        memory_history.append(memory_usage)
 
 class Plugin():
     """
