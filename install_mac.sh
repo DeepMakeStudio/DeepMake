@@ -29,17 +29,17 @@ if ! command -v git &> /dev/null; then
 fi
 
 #if install path is empty, clone the repo otherwise pull the latest changes
-if [ -z "$(ls -A $install_path)" ]; then
+if [ -z "$(ls -A "$install_path")" ]; then
     echo "Installing DeepMake to $install_path"
-    git clone https://github.com/DeepMakeStudio/DeepMake.git $install_path
+    git clone https://github.com/DeepMakeStudio/DeepMake.git "$install_path"
 else
     echo "Updating DeepMake at $install_path"
-    cd $install_path
+    cd "$install_path"
     git pull
     cd -
 fi
 
-$conda_path env create -y -f $install_path/environment.yml
+$conda_path env create -y -f "$install_path"/environment.yml
 
 #Download binaries
 curl -s -L https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Binaries_Mac.zip -o "$TMP_DIR"/Binaries_Mac.zip
