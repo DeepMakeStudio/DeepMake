@@ -44,17 +44,7 @@ def store_multiple_images(img_data):
     storage.put_data(shape_id, np.array(shape).tobytes())
     return img_id
 
-def report_memory_usage(memory_history, plugin_data):
-    if torch.cuda.is_available():
-        memory_usage = torch.cuda.memory_allocated() / 2**20
-    elif torch.backends.mps.is_available():
-        memory_usage = torch.mps.current_allocated_memory() / 2**20
-    if len(memory_history) != 0:
-        model_mem = memory_history[0]
-        memory_history.append(memory_usage + model_mem)
-        plugin_data["memory_usage"] = np.mean(memory_history[1:])
-    else:
-        memory_history.append(memory_usage)
+
 
 class Plugin():
     """
@@ -66,6 +56,7 @@ class Plugin():
         self.plugin = arguments.plugin
         self.config = arguments.config
         self.endpoints = arguments.endpoints
+        self.memory_history = {"inference": [], "model": 0}
 
     def plugin_info(self):
         """ int: The number of samples to take from the input video/images """
@@ -100,3 +91,16 @@ class Plugin():
                 print("Callback failed. Check the main system.")
         except:
             print("Failed to notify the main system. Ensure it's running.")
+        
+    def report_memory_usage(self, model=False):
+        if torch.cuda.is_available():
+            memory_usage = torch.cuda.memory_allocated() / 2**20
+        elif torch.backends.mps.is_available():
+            memory_usage = torch.mps.current_allocated_memory() / 2**20
+        if model:
+            self.memory_history["model"] = memory_usage
+        else:
+            model_mem = self.memory_history["model"]
+            self.memory_history["inference"].append(memory_usage + model_mem)
+            self.plugin["memory_usage"] = np.max(self.memory_history["inference"])
+        return self.memory_history, self.plugin

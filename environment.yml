@@ -1,9 +1,14 @@
 name: deepmake
 channels:
+  - pytorch
+  - nvidia
   - defaults
 dependencies:
   - pip
   - python=3.10
+  - pytorch 
+  - torchvision
+  - pytorch-cuda=11.8
   - pip:
       - anyio
       - click
