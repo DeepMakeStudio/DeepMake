@@ -89,9 +89,6 @@ class Job(BaseModel):
     created_at: datetime = datetime.now()
     description: Optional[str] = None
 
-class Item(BaseModel):
-    value: str
-
 jobs = {}
 finished_jobs = []
 running_jobs = []
@@ -469,7 +466,7 @@ async def store_multiple_images(data):
     return img_id
 
 @app.put("/data/store/{key}")
-async def store_data(key: str, item: Item):
+async def store_data(key: str, item: dict):
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
     value = json.dumps(dict(item))
