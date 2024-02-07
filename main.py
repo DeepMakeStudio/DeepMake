@@ -123,7 +123,7 @@ def startup():
     init_db()  # Initialize the database
 
 def init_db():
-    conn = sqlite3.connect(os.path.join(storage_folder, 'huey_storage.db'))
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS key_value_store (
@@ -470,27 +470,29 @@ async def store_multiple_images(data):
 
 @app.put("/data/store/{key}")
 async def store_data(key: str, item: Item):
-    conn = sqlite3.connect(os.path.join(storage_folder, 'huey_storage.db'))
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
-    cursor.execute("REPLACE INTO key_value_store (key, value) VALUES (?, ?)", (key, item.value))
+    value = json.dumps(dict(item))
+    cursor.execute("REPLACE INTO key_value_store (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
     conn.close()
     return {"message": "Data stored successfully"}
 
 @app.get("/data/retrieve/{key}")
 async def retrieve_data(key: str):
-    conn = sqlite3.connect(os.path.join(storage_folder, 'huey_storage.db'))
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
     cursor.execute("SELECT value FROM key_value_store WHERE key = ?", (key,))
     row = cursor.fetchone()
     conn.close()
+    data = json.loads(row[0])
     if row:
-        return {"value": row[0]}
+        return data
     raise HTTPException(status_code=404, detail="Key not found")
 
 @app.delete("/data/delete/{key}")
 async def delete_data(key: str):
-    conn = sqlite3.connect(os.path.join(storage_folder, 'huey_storage.db'))
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
     cursor.execute("DELETE FROM key_value_store WHERE key = ?", (key,))
     conn.commit()
