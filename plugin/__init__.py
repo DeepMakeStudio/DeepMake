@@ -49,7 +49,7 @@ class Plugin():
     """
 
     def __init__(self, arguments):
-        self.plugin_name = "default"
+        self.plugin_name = arguments.name
         self.plugin = arguments.plugin
         self.config = arguments.config
         self.endpoints = arguments.endpoints

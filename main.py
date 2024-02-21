@@ -262,7 +262,13 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     pid = p.pid
     process_ids[plugin_name] = pid
 
+    time.sleep(5)
+    huey_start_plugin(plugin_name, port)
     return {"started": True, "plugin_name": plugin_name, "port": port}
+
+@huey.task()
+def huey_start_plugin(plugin_name: str, port: int):
+    client.get(f"http://127.0.0.1:{port}/startup/{plugin_name}")
 
 @app.get("/plugins/stop_plugin/{plugin_name}")
 def stop_plugin(plugin_name: str):
