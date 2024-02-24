@@ -274,7 +274,7 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     else:
         if CONDA:
             conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
-            if conda_path == "":
+            if conda_path == "" or if conda_path == "%CONDA_EXE%":
                 conda_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "conda.exe")
                 activate_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "activate.bat")
                 p = subprocess.Popen(f"{activate_path} init && {conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
