@@ -27,7 +27,7 @@ import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
-CONDA = True
+CONDA = "MiniConda3"
 
 def get_id(): # return md5 hash of uuid.getnode()
     return md5(str(uuid.getnode()).encode()).hexdigest()
@@ -162,7 +162,10 @@ async def store_image(data):
 
 def available_gpu_memory():
     command = "nvidia-smi --query-gpu=memory.free --format=csv"
-    memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
+    try:
+        memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
+    except: 
+        return -1
     memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
     return np.sum(memory_free_values)
 
@@ -242,14 +245,15 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
         memory_func = mac_gpu_memory
     
     available_memory = memory_func()
-    if plugin_name in plugin_memory.keys():
-        while plugin_memory[plugin_name] > available_memory:
-            plugin_to_shutdown = most_recent_use.pop()
-            stop_plugin(plugin_to_shutdown)
-            time.sleep(1)
-            available_memory = memory_func() 
-    if plugin_name not in plugin_info.keys():
-        get_plugin_info(plugin_name)
+    if available_memory >= 0:
+        if plugin_name in plugin_memory.keys():
+            while plugin_memory[plugin_name] > available_memory:
+                plugin_to_shutdown = most_recent_use.pop()
+                stop_plugin(plugin_to_shutdown)
+                time.sleep(1)
+                available_memory = memory_func() 
+        if plugin_name not in plugin_info.keys():
+            get_plugin_info(plugin_name)
 
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
@@ -270,7 +274,12 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     else:
         if CONDA:
             conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
-            p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+            if conda_path == "":
+                conda_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "conda.exe")
+                activate_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "activate.bat")
+                p = subprocess.Popen(f"{activate_path} init && {conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+            else:
+                p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
         else:
             p = subprocess.Popen(f"envs\plugins\python.exe -m uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
     pid = p.pid
@@ -394,6 +403,18 @@ def get_running_jobs():
 
 @app.get("/backend/shutdown")
 def shutdown():
+    for plugin_name in list(process_ids.keys()):
+        stop_plugin(plugin_name)
+    
+    if os.path.exists(os.path.join(storage_folder, "huey")):
+        shutil.rmtree(os.path.join(storage_folder, "huey"))
+    if os.path.exists(os.path.join(storage_folder, "huey_storage")):
+        shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
+    if os.path.exists(os.path.join(storage_folder, "huey.db")):
+        os.remove(os.path.join(storage_folder, "huey.db"))
+    if os.path.exists(os.path.join(storage_folder, "huey_storage.db")):
+        os.remove(os.path.join(storage_folder, "huey_storage.db"))
+    
     stop_plugin("main")
 
 @app.on_event("shutdown")
