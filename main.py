@@ -247,7 +247,7 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     available_memory = memory_func()
     if available_memory >= 0:
         if plugin_name in plugin_memory.keys():
-            while plugin_memory[plugin_name] > available_memory:
+            while plugin_memory[plugin_name] > available_memory and len(most_recent_use) > 0:
                 plugin_to_shutdown = most_recent_use.pop()
                 stop_plugin(plugin_to_shutdown)
                 time.sleep(1)
@@ -277,7 +277,7 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
             if not os.path.isfile(conda_path):
                 conda_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "conda.exe")
                 activate_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "activate.bat")
-                p = subprocess.Popen(f"{activate_path} init && {conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+                p = subprocess.Popen(f"{activate_path}  && {conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
             else:
                 p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
         else:
