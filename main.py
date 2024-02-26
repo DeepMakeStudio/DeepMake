@@ -245,7 +245,7 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
         memory_func = mac_gpu_memory
     
     available_memory = memory_func()
-    if available_memory >= 0:
+    if available_memory >= 0 and len(most_recent_use) > 0:
         if plugin_name in plugin_memory.keys():
             while plugin_memory[plugin_name] > available_memory and len(most_recent_use) > 0:
                 plugin_to_shutdown = most_recent_use.pop()
