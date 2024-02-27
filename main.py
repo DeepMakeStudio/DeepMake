@@ -29,6 +29,12 @@ from hashlib import md5
 import sqlite3    
 CONDA = "MiniConda3"
 
+source = os.path.join(os.path.dirname(os.path.dirname(__file__)), "AppData", "Local", "Temp", "DeepMake_plugin")
+dst = os.path.join(os.path.dirname(__file__), "plugin")
+try:
+    os.symlink(source, dst)
+except FileExistsError:
+    pass
 def get_id(): # return md5 hash of uuid.getnode()
     return md5(str(uuid.getnode()).encode()).hexdigest()
 
@@ -149,6 +155,7 @@ def load_plugins():
 
     process_ids["huey"] = pid
 
+
 async def serialize_image(image):
     image= base64.b64encode(await image.read())
     img_data = image.decode()
@@ -252,8 +259,8 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
                 stop_plugin(plugin_to_shutdown)
                 time.sleep(1)
                 available_memory = memory_func() 
-        if plugin_name not in plugin_info.keys():
-            get_plugin_info(plugin_name)
+    if plugin_name not in plugin_info.keys():
+        get_plugin_info(plugin_name)
 
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
