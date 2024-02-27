@@ -5,12 +5,14 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
+#Define installation paths
 install_path="/Library/Application Support/DeepMake"
 conda_install_path="~/miniconda3"
 aeplugin_path="/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/"
 
 mkdir -p $install_path
 
+#Install conda if not installed
 if command -v conda &> /dev/null; then
     echo "conda is installed and available in the PATH"
     conda_path="conda"
@@ -39,11 +41,24 @@ else
     cd -
 fi
 
+#Create conda environment
 $conda_path env create -y -f "$install_path"/environment.yml
+
+#Install Diffusers plugin or update if already installed
+if [ -z "$(ls -A "$install_path")" ]; then
+    echo "Installing DeepMake to $install_path"
+    git clone https://github.com/DeepMakeStudio/Diffusers.git "$install_path/plugin/Diffusers"
+else
+    echo "Updating Diffusers Plugin at $install_path/plugin/Diffusers"
+    cd "$install_path/plugin/Diffusers"
+    git pull
+    cd -
+fi
+
+$conda_path env create -y -f "$install_path/plugin/Diffusers"/environment_mac.yml
 
 #Download binaries
 curl -s -L https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Binaries_Mac.zip -o "$TMP_DIR"/Binaries_Mac.zip
-
 
 unzip -o "$TMP_DIR"/Binaries_Mac.zip -d "$TMP_DIR"
 cp -Rf "$TMP_DIR"/DeepMake/DeepMake_ae.bundle "$aeplugin_path"
