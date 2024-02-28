@@ -70,8 +70,16 @@ echo '{ "Py_Environment": "conda activate deepmake;", "Startup_CMD": " python st
 curl -s -L https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Binaries_Mac.zip -o "$TMP_DIR"/Binaries_Mac.zip
 
 unzip -o "$TMP_DIR"/Binaries_Mac.zip -d "$TMP_DIR"
+# if /DeepMake/DeepMake_ae.bundle exists, remove it
+if [ -d "$aeplugin_path"/DeepMake_ae.bundle ]; then
+    rm -Rf "$aeplugin_path"/DeepMake_ae.bundle
+fi
 cp -Rf "$TMP_DIR"/DeepMake/DeepMake_ae.bundle "$aeplugin_path"
-cp -Rf "$TMP_DIR"/DeepMake/appPrompt.app /Applications/
+# if /DeepMake/DeepMake_ae.bundle exists, remove it
+if [ -d /Applications/appPrompt.app ]; then
+    rm -Rf /Applications/appPrompt.app
+fi
+cp -Rf "$TMP_DIR"/DeepMake/appPrompt.app /Applications/appPrompt.app
 
 rm -Rf $TMP_DIR
 
