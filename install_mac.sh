@@ -32,6 +32,11 @@ fi
 
 #if install path is empty, clone the repo otherwise pull the latest changes
 if [ -z "$(ls -A "$install_path")" ]; then
+    #Check if install_path is a git folder and if not remove it
+    if ! [ -d "$install_path/.git" ]; then
+        echo "Removing non-git folder at $install_path"
+        rm -Rf "$install_path"
+    fi
     echo "Installing DeepMake to $install_path"
     git clone https://github.com/DeepMakeStudio/DeepMake.git "$install_path"
 else
@@ -45,8 +50,8 @@ fi
 $conda_path env create -y -f "$install_path"/environment.yml
 
 #Install Diffusers plugin or update if already installed
-if [ -z "$(ls -A "$install_path")" ]; then
-    echo "Installing DeepMake to $install_path"
+if [ -z "$(ls -A "$install_path/plugin/Diffusers")" ]; then
+    echo "Installing Diffusers to $install_path/plugin/Diffusers"
     git clone https://github.com/DeepMakeStudio/Diffusers.git "$install_path/plugin/Diffusers"
 else
     echo "Updating Diffusers Plugin at $install_path/plugin/Diffusers"
