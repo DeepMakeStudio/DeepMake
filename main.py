@@ -23,6 +23,7 @@ from time import sleep
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
+from huey.exceptions import TaskException
 import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
@@ -239,6 +240,11 @@ def set_plugin_config(plugin_name: str, config: dict):
 
 @app.get("/plugins/start_plugin/{plugin_name}")
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
+    get_plugin_info(plugin_name)
+
+    if plugin_name in port_mapping.keys():
+        return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
+
     if sys.platform != "darwin":
         memory_func = available_gpu_memory
     else:
@@ -255,8 +261,6 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
         if plugin_name not in plugin_info.keys():
             get_plugin_info(plugin_name)
 
-    if plugin_name in port_mapping.keys():
-        return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
     plugin_states[plugin_name] = "STARTING"
     if port is None:
         port = np.random.randint(min_port,max_port)
@@ -273,11 +277,16 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
             p = subprocess.Popen(f"envs\plugins\python -m uvicorn plugin.{plugin_name}.plugin:app --port {port}".split())
     else:
         if CONDA:
-            conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
+            if os.getenv('CONDA_EXE'):
+                conda_path = os.getenv('CONDA_EXE')
+            elif sys.platform == "win32":
+                conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
+            else:
+                conda_path = subprocess.check_output("echo $CONDA_EXE", shell=True)[:-2].decode()
             if not os.path.isfile(conda_path):
                 conda_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "conda.exe")
                 activate_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "activate.bat")
-                p = subprocess.Popen(f"{activate_path}  && {conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+                p = subprocess.Popen(f"{activate_path}  && {conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)           
             else:
                 p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
         else:
@@ -350,7 +359,7 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
         result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
         counter += 1
         if counter > 10:
-            raise HTTPException(status_code=500, detail=f"Plugin {plugin_name} failed to start")
+            raise HTTPException(status_code=504, detail=f"Plugin {plugin_name} failed to start")
     else:
         port = result[plugin_name]["port"]
     endpoint = plugin_endpoints[plugin_name][endpoint]
@@ -464,7 +473,11 @@ def get_job(job_id: str):
     # print("moving job")
     move_job(job_id)
     # print("found job")
-    return job()
+    try:
+        result = job()
+    except TaskException as e:
+        return {"status": "Job failed", "detail": str(e)}
+    return result
 
 @app.get("/image/get/{img_id}")
 async def get_img(img_id: str):
