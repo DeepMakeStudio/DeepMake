@@ -294,11 +294,15 @@ def stop_plugin(plugin_name: str):
         parent_pid = process_ids[plugin_name]   # my example
         try:
             parent = psutil.Process(parent_pid)
+        except NoSuchProcess:
+            return {"status": "Failed", "Reason": f"Failed to kill {parent_pid} for plugin {plugin_name}"}
+        try:
             for child in parent.children(recursive=True):  # or parent.children() for recursive=False
                 child.kill()
             parent.kill()
-        except NoSuchProcess:
-            return {"status": "Failed", "Reason": f"Plugin {plugin_name} not found"}
+        except:
+            return {"status": "Failed", "Reason": f"Failed to kill plugin {plugin_name}"}
+
         process_ids.pop(plugin_name)
         if plugin_name != "huey":
             port_mapping.pop(plugin_name)
@@ -414,10 +418,11 @@ def shutdown():
     if os.path.exists(os.path.join(storage_folder, "huey_storage")):
         shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
     if os.path.exists(os.path.join(storage_folder, "huey.db")):
-        os.remove(os.path.join(storage_folder, "huey.db"))
-    if os.path.exists(os.path.join(storage_folder, "huey_storage.db")):
-        os.remove(os.path.join(storage_folder, "huey_storage.db"))
-    
+        try:
+            os.remove(os.path.join(storage_folder, "huey.db"))
+        except PermissionError:
+            print("Failed to remove huey.db")
+
     stop_plugin("main")
 
 @app.on_event("shutdown")
@@ -430,9 +435,10 @@ async def shutdown_event():
     if os.path.exists(os.path.join(storage_folder, "huey_storage")):
         shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
     if os.path.exists(os.path.join(storage_folder, "huey.db")):
-        os.remove(os.path.join(storage_folder, "huey.db"))
-    if os.path.exists(os.path.join(storage_folder, "huey_storage.db")):
-        os.remove(os.path.join(storage_folder, "huey_storage.db"))
+        try:
+            os.remove(os.path.join(storage_folder, "huey.db"))
+        except PermissionError:
+            print("Failed to remove huey.db")
 
 @app.put("/job")
 def add_job(job: Job):
