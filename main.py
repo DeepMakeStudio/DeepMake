@@ -292,16 +292,19 @@ def stop_plugin(plugin_name: str):
     # need some test to ensure open port
     if plugin_name in process_ids.keys():
         parent_pid = process_ids[plugin_name]   # my example
-        parent = psutil.Process(parent_pid)
-        for child in parent.children(recursive=True):  # or parent.children() for recursive=False
-            child.kill()
-        parent.kill()
+        try:
+            parent = psutil.Process(parent_pid)
+            for child in parent.children(recursive=True):  # or parent.children() for recursive=False
+                child.kill()
+            parent.kill()
+        except NoSuchProcess:
+            return {"status": "Failed", "Reason": f"Plugin {plugin_name} not found"}
         process_ids.pop(plugin_name)
         if plugin_name != "huey":
             port_mapping.pop(plugin_name)
             plugin_states[plugin_name] = "STOPPED"
         
-    return f"{plugin_name} stopped"
+    return {"status": "Success", "description": f"{plugin_name} stopped"}
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
