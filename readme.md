@@ -1,8 +1,20 @@
 # DeepMake
 
+![Deepmake Logo](images/DeepMake.png)
+
 DeepMake uses generative AI make content creation fast and easy. We leverage the leading open source AI to give you VFX in a few clicks, create stock video from text prompts, instantly segment layers, and more.
 
-![Deepmake Logo](images/DeepMake.png)
+# Youtube
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=r3-EgzS6TjE">
+    <img src="https://img.youtube.com/vi/r3-EgzS6TjE/0.jpg" />
+  </a>
+</p>
+
+# Features
+
+Empower your creativity by giving After Effects generative AI abilities.
 
 # Support
 
@@ -14,23 +26,27 @@ This repo contains the backend for DeepMake software.  It requires host plugins 
 
 # Installation
 
-## Install the Deepmake Backend
+We're constantly working to make installation easier to use.
+
+## Install the DeepMake Backend
+
+The first step is to install the DeepMake Backend.
+
 ### Easy install
 
 #### MacOS (Apple Silicon only)
-For Mac OS we have an easy installer available.  Simply run
+For Mac OS we have an easy installer available.  Simply run the following command.  When it asks you for "password" you need to enter your Mac login password so it can install in the correct folders.
 
 `curl -s -L https://raw.githubusercontent.com/DeepMakeStudio/DeepMake/main/install_mac.sh -o install_mac.sh && sudo sh ./install_mac.sh`
 
 It should handle all the installation steps for the backend and you can continue to [Install any processing plugins you want](#Install any processing plugins you want)
 
 #### Windows
+Our Windows Installer will handle installing all required components and getting Deepmake running on your system.
 
-Our installer for Windows is currently in Alpha and is unsigned. It includes a copy of Python which many antiviruses tag as malicious. To use it you may need to bypass your antivirus.
+[Download the Installer](https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/DeepMake_Win_Installer.exe)
 
-[Download the Installer](https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Installer_Win.exe)
-
-If you're worried and don't want to override your antivirus you can do the manual install instead.
+After installation, you can continue to [Install any processing plugins you want](#Install any processing plugins you want)
 
 ### Manual Install
 For the most up-to-date instructions for manual installation, please see the [installation guide on our website](https://deepmake.com/install/#manual-installation)
@@ -65,6 +81,14 @@ For the most up-to-date instructions for manual installation, please see the [in
     * Mac: Run `conda env create -f plugin/{folder}/environment_mac.yml` for each package in the plugin folder.  (I.E. `conda env create -f plugin/Diffusers/environment_mac.yml`)
 
 Congratulations!  You've installed DeepMake.  You can add new processing plugins as they become available.
+
+#### Run the Backend
+When you install manually, you must manually start the backend for the host plugins to be able to work.
+
+* Open an Anaconda Prompt in your DeepMake folder.
+* run `conda activate deepmake`
+* Run `python startup.py`
+You can then run the plugin in your host software.
 
 # Usage
 
