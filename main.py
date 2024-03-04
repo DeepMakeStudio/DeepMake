@@ -45,6 +45,8 @@ sentry_sdk.init(
 sentry_sdk.set_user({"id": get_id()})
 sentry_sdk.set_tag("platform", sys.platform)
 
+sentry_sdk.capture_message('Backend started')
+
 global port_mapping
 global plugin_endpoints
 global storage_dictionary
