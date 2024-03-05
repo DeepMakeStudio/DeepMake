@@ -64,7 +64,7 @@ $conda_path env create -y -f "$install_path/plugin/Diffusers"/environment_mac.ym
 
 #Create Config file
 mkdir -p ./Library/Application\ Support/DeepMake
-echo '{ "Py_Environment": "conda activate deepmake;", "Startup_CMD": " python startup.py", "Directory": "cd '$install_path' ;" }' | sed s^Application\ Support^Application\\\\\\\\\\\\\\\\\ Support^ > ./Library/Application\ Support/DeepMake/Config.json
+echo '{ "Py_Environment": "conda activate deepmake;", "Startup_CMD": " python startup.py", "Directory": "cd '$install_path' ;" }' | sed s^Application\ Support^Application\\\\\\\\\\\\\\\\\ Support^ > ~/Library/Application\ Support/DeepMake/Config.json
 
 #Download binaries
 curl -s -L https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Binaries_Mac.zip -o "$TMP_DIR"/Binaries_Mac.zip
