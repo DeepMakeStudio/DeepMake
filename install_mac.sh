@@ -17,8 +17,8 @@ mkdir -p $install_path
 mkdir -p $config_path
 
 #Create Config file
-config_data='{ "Py_Environment": "conda activate deepmake;", "Startup_CMD": " python startup.py", "Directory": "cd '$install_path' ;" }' | sed 's^Application\ Support^Application\\\\\\\\\ Support^'
-echo $config_data > $config_path/Config.json
+config_data=`echo '{ "Py_Environment": "conda activate deepmake;", "Startup_CMD": " python startup.py", "Directory": "cd '$install_path' ;" }' | sed 's^Application\ Support^Application\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ Support^'`
+echo "$config_data" > $config_path/Config.json
 
 #Install conda if not installed
 if command -v conda &> /dev/null; then
