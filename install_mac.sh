@@ -24,6 +24,7 @@ echo "$config_data" > $config_path/Config.json
 if command -v conda &> /dev/null; then
     echo "conda is installed and available in the PATH"
     conda_path="conda"
+    $conda_path init zsh bash
 else
     conda_path=$conda_install_path"/bin/conda"
     echo "conda is not installed or not in the PATH"
@@ -33,7 +34,7 @@ else
     $conda_path config --set auto_activate_base false
 fi
 
-#Install git from conda if not installe
+#Install git from conda if not installed
 if ! command -v git &> /dev/null; then
     $conda_path install -y git
 fi
