@@ -27,6 +27,9 @@ import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
+from config_gui import ConfigGUI
+from PyQt6.QtWidgets import QApplication, QWidget
+from qt_material import apply_stylesheet
 CONDA = "MiniConda3"
 
 def get_id(): # return md5 hash of uuid.getnode()
@@ -252,8 +255,8 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
                 stop_plugin(plugin_to_shutdown)
                 time.sleep(1)
                 available_memory = memory_func() 
-        if plugin_name not in plugin_info.keys():
-            get_plugin_info(plugin_name)
+    if plugin_name not in plugin_info.keys():
+        get_plugin_info(plugin_name)
 
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
@@ -516,3 +519,15 @@ async def delete_data(key: str):
     conn.commit()
     conn.close()
     return {"message": "Data deleted successfully"}
+
+@app.get("/ui/configure/{plugin_name}")
+def plugin_config_ui(plugin_name: str):
+    app = QApplication(sys.argv)
+    window = ConfigGUI(plugin_name)
+    apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
+    window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
+    window.show()
+    try:
+        sys.exit(app.exec())
+    except:
+        pass
