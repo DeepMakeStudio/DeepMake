@@ -6,6 +6,9 @@ import json
 import subprocess
 fastapi_launcher_path = os.path.join(os.path.dirname(__file__), "plugin")
 import sys
+import requests
+
+client = requests.Session()
  
 class Worker(QObject):
     popen_string = " "
@@ -54,7 +57,7 @@ class ButtonList(QDialog):
 
 
 
-class Window(QWidget):
+class PluginManager(QWidget):
     def __init__(self):
         super().__init__() 
         self.title = "Plugin Manager"
@@ -143,10 +146,7 @@ class Window(QWidget):
         if plugin_name in os.listdir(fastapi_launcher_path):
             print("Plugin already installed")
             return
-        print("Installing", plugin_name)
-        clone_link = self.plugin_dict["plugin"][plugin_name]["url"] + ".git"
-        folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
-
+    
         row_number = list(self.plugin_dict['plugin'].keys()).index(plugin_name)
         # installing_button = QPushButton(f"Installing")
         self.tableWidget.removeCellWidget(row_number, 3)
@@ -154,17 +154,11 @@ class Window(QWidget):
         installing_item = QTableWidgetItem("Installing...")
         self.tableWidget.setItem(row_number, 3, installing_item)
         installing_item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
-        
-
-        if sys.platform != "win32":
-            p = subprocess.Popen(f"git clone {clone_link} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        else:
-            p = subprocess.Popen(f"git clone {clone_link} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (out, err) = p.communicate()
-        if "already exists" in err.decode("utf-8"):
-            print("Plugin already installed")
-        else:
-            print("Installed", plugin_name)
+        clone_link = self.plugin_dict["plugin"][plugin_name]["url"] + ".git"
+        folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
+        print("Installing", plugin_name)
+        r = client.get(f"http://127.0.0.1:8000/")
+        print(r.text)
 
         self.thread_process(f"conda env create -f {folder_path}/environment.yml", row_number)
 
