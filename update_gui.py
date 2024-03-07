@@ -102,14 +102,14 @@ class Updater(QWidget):
         return tag
 
 
-app = QApplication(sys.argv)
+# app = QApplication(sys.argv)
 
-window = Updater()
+# window = Updater()
 
-apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
+# apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
 
-window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
+# window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
 
-window.show()
+# window.show()
 
-sys.exit(app.exec())
+# sys.exit(app.exec())
