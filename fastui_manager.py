@@ -64,19 +64,54 @@ def users_table() -> list[AnyComponent]:
 
 @app.get("/api/install/{plugin_name}/", response_model=FastUI, response_model_exclude_none=True)
 def install_plugin(plugin_name: str):
-    clone_link = plugin_dict["plugin"][plugin_name]["url"] + ".git"
-    folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
-    if sys.platform != "win32":
-        p = subprocess.Popen(f"git clone {clone_link} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    id_of_plugin = plugin_list.index([plugin for plugin in plugin_list if plugin.name == plugin_name][0])
+    target_plugin = plugin_list[id_of_plugin]
+    if target_plugin.install == "Install":
+        clone_link = plugin_dict["plugin"][plugin_name]["url"] + ".git"
+        folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
+        if sys.platform != "win32":
+            p = subprocess.Popen(f"git clone {clone_link} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            p = subprocess.Popen(f"git clone {clone_link} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = p.communicate()
+        if "already exists" in err.decode("utf-8"):
+            print("Plugin already installed")
+        else:
+            print("Installed", plugin_name)
+        target_plugin.install = "Manage"
     else:
-        p = subprocess.Popen(f"git clone {clone_link} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
-    if "already exists" in err.decode("utf-8"):
-        print("Plugin already installed")
-    else:
-        print("Installed", plugin_name)
+        return c.Page(
+            components=[
+                c.Heading(text="Manage Plugin", level=2),
+                c.Button(text="Back", on_click=BackEvent()),
+                c.Button(text="Uninstall", on_click=GoToEvent(url=f"/uninstall/{plugin_name}/")),
+                c.Button(text="Manage", on_click=GoToEvent(url=f"/manage/{plugin_name}/")),
+                c.Paragraph(text="This plugin is already installed, you can manage it from the plugin folder."),
+            ]
+        )
+
     # return
     # return GoToEvent(url="/api/")
+    return GoToEvent(url='/')
+
+    
+@app.get("/api/uninstall/{plugin_name}/", response_model=FastUI, response_model_exclude_none=True)
+def uninstall_plugin(plugin_name: str):
+    for plugin in plugin_list:
+        print(plugin.name, plugin_name)
+    id_of_plugin = plugin_list.index([plugin for plugin in plugin_list if plugin.name == plugin_name][0])
+    target_plugin = plugin_list[id_of_plugin]
+    folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
+    if sys.platform != "win32":
+        p = subprocess.Popen(f"rm -rf {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        p = subprocess.Popen(f"rmdir /s /q {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (out, err) = p.communicate()
+    if "No such file or directory" in err.decode("utf-8"):
+        print("Plugin already uninstalled")
+    else:
+        print("Uninstalled", plugin_name)
+    target_plugin.install = "Install"
     return GoToEvent(url='/')
 
 @app.get('/{path:path}')
