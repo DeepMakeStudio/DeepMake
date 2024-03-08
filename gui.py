@@ -1,32 +1,31 @@
-from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QProgressBar, QComboBox, QHBoxLayout, QListWidget, QHeaderView, QTableWidget, QVBoxLayout, QTableWidgetItem, QDialog, QScrollArea, QDialogButtonBox
+from PyQt6.QtWidgets import QWidget, QPushButton, QLineEdit, QComboBox, QSlider, QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox, QDialog, QScrollArea, QDialogButtonBox, QLabel
 from PyQt6.QtCore import Qt, pyqtSignal, QObject, QThread
-from qt_material import apply_stylesheet
+from PyQt6.QtWidgets import QApplication, QWidget, QPushButton, QProgressBar, QComboBox, QHBoxLayout, QListWidget, QHeaderView, QTableWidget, QVBoxLayout, QTableWidgetItem, QDialog, QScrollArea, QDialogButtonBox
 import os
-import json
-import subprocess
 fastapi_launcher_path = os.path.join(os.path.dirname(__file__), "plugin")
 import sys
 import requests
-
+import subprocess
+import json 
 client = requests.Session()
- 
-class Worker(QObject):
-    popen_string = " "
+
+class setWorker(QObject):
+    name = ""
+    output_config = {}
     finished = pyqtSignal()
     # progress = pyqtSignal(int)
     def run(self):
         """Long-running task."""
-        if sys.platform != "win32":
-            p = subprocess.Popen(self.popen_string.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        else:   
-            p = subprocess.Popen(self.popen_string, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p.wait()
+        r = client.put(f"http://127.0.0.1:8000/plugins/set_config/{self.name}", json = self.output_config)
 
-        self.finished.emit()
+        self.finished.emit()   
 
-class PluginManager(QWidget):
+
+
+class PluginManagerGUI(QWidget):
     def __init__(self):
         super().__init__() 
+        
         self.title = "Plugin Manager"
         self.left = 0
         self.top = 0
@@ -35,7 +34,7 @@ class PluginManager(QWidget):
         self.setWindowTitle(self.title) 
         self.setGeometry(self.left, self.top, self.width, self.height) 
         # self.setStyleSheet( "color: white; border-color: #7b3bff")
-        r = client.get(f"http://127.0.0.1:8000/plugins/get_config/Diffusers")
+        # r = client.get(f"http://127.0.0.1:8000/plugins/get_config/Diffusers")
    
         
         with open(os.path.join(os.path.dirname(__file__), "gui_info.json")) as f:
@@ -124,8 +123,19 @@ class PluginManager(QWidget):
         clone_link = self.plugin_dict["plugin"][plugin_name]["url"] + ".git"
         folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
         print("Installing", plugin_name)
-        r = client.get(f"http://127.0.0.1:8000/")
-        print(r.text)
+        # r = client.get(f"http://127.0.0.1:8000/")
+        # print(r.text)
+        print("nice")
+        folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
+        if sys.platform != "win32":
+            p = subprocess.Popen(f"git clone {url} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = p.communicate()
+        if "already exists" in err.decode("utf-8"):
+            print("Plugin already installed")
+        else:
+            print("Installed", plugin_name)
 
         self.thread_process(f"conda env create -f {folder_path}/environment.yml", row_number)
 
@@ -188,7 +198,6 @@ class PluginManager(QWidget):
         install_label.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.tableWidget.setItem(row, 3, install_label)
 
-
 class CustomDialog(QDialog):
     def __init__(self, plugin_name):
         super().__init__()
@@ -218,10 +227,6 @@ class CustomDialog(QDialog):
         self.layout.addWidget(self.tableWidget)
         # self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
-
-    def test_plugin(self):
-        self.tableWidget.setItem(0, 1, QTableWidgetItem("Testing..."))
-
 
     def update_plugin(self, plugin_name):
         if len(self.tag_list) == 0:
@@ -293,14 +298,128 @@ class CustomDialog(QDialog):
         # print(tag)
         return tag
 
-# app = QApplication(sys.argv)
+class ConfigGUI(QWidget):
+    def __init__(self, plugin_name):
+        super().__init__() 
+        self.name = plugin_name
+        self.title = f"{plugin_name} Configuration"
+        self.left = 0
+        self.top = 0
+        self.width = 800
+        self.height = 300
+        self.setWindowTitle(self.title) 
+        self.setGeometry(self.left, self.top, self.width, self.height)    
 
-# window = Window()
+        r = client.get(f"http://127.0.0.1:8000/plugins/get_config/{plugin_name}")
+        config = r.json()
+        self.output_config = config
+        self.layout = QVBoxLayout() 
+        self.widget_dict = {}
 
-# apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
 
-# window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
+        self.guiFromConfig(config)
 
-# window.show()
+        self.submit_button = QPushButton("Submit")
+        self.submit_button.clicked.connect(self.start)
+        self.layout.addWidget(self.submit_button) 
+        self.setLayout(self.layout) 
+        # self.setFixedSize(self.layout.sizeHint())
 
-# sys.exit(app.exec())
+
+    def guiFromConfig(self, config):
+        for key in config:
+            value = config[key]
+            print(type(value))  
+            label = QLabel(key)
+            self.layout.addWidget(label)
+            if isinstance(value, str):
+                # self.widget_dict[key] = QLineEdit(f"{value}")
+                text_box = QLineEdit(f"{value}")
+                # text_box.textChanged.connect(lambda key = key, text=text_box.text(): self.editConfig(key, text))
+                text_box.textChanged.connect(lambda text, key = key: self.editConfig(key, text))
+                # self.widget_dict[key] = text_box
+                self.layout.addWidget(text_box) 
+            elif isinstance(value, list):
+                dropdown = QComboBox()
+                for item in value:
+                    dropdown.addItem(item)
+                dropdown.setEditable(True)
+                dropdown.currentTextChanged.connect(lambda text, key = key: self.editConfig(key, text))
+                self.layout.addWidget(dropdown)
+            elif isinstance(value, bool):
+                checkbox = QCheckBox(f"{key}")
+                checkbox.stateChanged.connect(lambda state, key = key: self.setBool(key, state))
+                self.layout.addWidget(checkbox)
+            elif isinstance(value, int):
+                print(key, value)
+                h_layout = QHBoxLayout()
+                number_label = QLabel(f"{value}")
+
+                slider = QSlider(Qt.Orientation.Horizontal)
+                slider.setMinimum(1)
+                slider.setMaximum(10000)
+                slider.setValue(value)
+                slider.valueChanged.connect(lambda number, key = key: self.editConfig(key, number))
+                slider.valueChanged.connect(lambda number, label= number_label: self.changeValue(label, number))
+                policy = slider.sizePolicy()
+                policy.setHorizontalPolicy(QSizePolicy.Policy.Expanding)
+                slider.setSizePolicy(policy)
+                h_layout.addWidget(slider)
+                h_layout.addWidget(number_label)
+                self.layout.addLayout(h_layout)
+            
+
+    def changeValue(self, label, value):
+        label.setText(f"{value}")
+    def editConfig(self, key, text):
+        self.output_config[key] = text
+        print(self.output_config)
+    def setBool(self, key, state):
+        if state == 2:
+            self.output_config[key] = True
+        else:
+            self.output_config[key] = False
+        print(self.output_config)
+
+    def submit_config(self):
+        
+        r = client.put(f"http://127.0.0.1:8000/plugins/set_config/{self.name}", json = self.output_config)
+    
+    def thread_process(self):
+
+        self.thread = QThread()
+
+        self.worker = setWorker()
+        self.worker.name = self.name
+        self.worker.output_config = self.output_config
+
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.start()
+        self.thread.finished.connect(self.renable)
+    
+    def renable(self):
+        self.submit_button.setEnabled(True)
+        self.submit_button.setText("Submit")
+    
+    def start(self):
+        self.submit_button.setEnabled(False)
+        self.submit_button.setText("Submitting...")
+        self.thread_process()
+
+class Worker(QObject):
+    popen_string = " "
+    finished = pyqtSignal()
+    # progress = pyqtSignal(int)
+    def run(self):
+        """Long-running task."""
+        if sys.platform != "win32":
+            p = subprocess.Popen(self.popen_string.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:   
+            p = subprocess.Popen(self.popen_string, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p.wait()
+
+        self.finished.emit()

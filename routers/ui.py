@@ -1,12 +1,10 @@
 from fastapi import APIRouter
 from PyQt6.QtWidgets import QApplication
 import sys
-from pyqt_gui_table import PluginManager
 from qt_material import apply_stylesheet
 import os
 import subprocess
-from config_gui import ConfigGUI
-
+from gui import ConfigGUI, PluginManagerGUI
 router = APIRouter()
 
 
@@ -17,9 +15,13 @@ async def start_ui():
 @router.get("/ui/plugin_manager", tags=["ui"])
 async def plugin_manager():
     app = QApplication(sys.argv)
-    window = PluginManager()
+    window = PluginManagerGUI()
     apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
-    # window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
+    window.show()
+    try:
+        sys.exit(app.exec())
+    except:
+        pass
 
 @router.get("/ui/configure/{plugin_name}", tags=["ui"])
 def plugin_config_ui(plugin_name: str):
@@ -53,6 +55,13 @@ async def read_user_me():
     return {"username": "fakecurrentuser"}
 
 
-@router.get("/ui/{username}", tags=["ui"])
-async def read_user(username: str):
-    return {"username": username}
+# @router.get("/ui/test/{plugin_name}", tags=["ui"])
+# async def test_ui(plugin_name: str):
+#     app = QApplication(sys.argv)
+#     window = TestGUI(plugin_name)
+#     apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
+#     window.show()
+#     try:
+#         sys.exit(app.exec())
+#     except:
+#         pass
