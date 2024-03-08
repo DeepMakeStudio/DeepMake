@@ -27,7 +27,7 @@ import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
-from config_gui import ConfigGUI
+from routers import ui
 from PyQt6.QtWidgets import QApplication, QWidget
 from qt_material import apply_stylesheet
 CONDA = "MiniConda3"
@@ -66,6 +66,7 @@ storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'h
 huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 
 app = FastAPI()
+app.include_router(ui.router)
 client = requests.Session()
 
 port_mapping = {"main": 8000}
@@ -520,14 +521,3 @@ async def delete_data(key: str):
     conn.close()
     return {"message": "Data deleted successfully"}
 
-@app.get("/ui/configure/{plugin_name}")
-def plugin_config_ui(plugin_name: str):
-    app = QApplication(sys.argv)
-    window = ConfigGUI(plugin_name)
-    apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
-    window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
-    window.show()
-    try:
-        sys.exit(app.exec())
-    except:
-        pass
