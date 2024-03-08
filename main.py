@@ -258,8 +258,8 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
                 stop_plugin(plugin_to_shutdown)
                 time.sleep(1)
                 available_memory = memory_func() 
-        if plugin_name not in plugin_info.keys():
-            get_plugin_info(plugin_name)
+    if plugin_name not in plugin_info.keys():
+        get_plugin_info(plugin_name)
 
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
