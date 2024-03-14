@@ -215,6 +215,11 @@ def get_plugin_info(plugin_name: str):
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
+            r = client.get(f"http://https://deepmake.com/plugins.json")
+            try:
+                plugin_info[plugin_name]["plugin"]["license"] = r.json()[plugin_name]["license"]
+            except:
+                plugin_info[plugin_name]["plugin"]["license"] = "Not Found"
         return plugin_info[plugin_name]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
