@@ -27,6 +27,7 @@ import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
+import asyncio
 CONDA = "MiniConda3"
 
 def get_id(): # return md5 hash of uuid.getnode()
@@ -68,7 +69,7 @@ client = requests.Session()
 port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
-plugin_memory = {"Diffusers": 4000, "GroundingDINO": 3000, "Bisenet": 400, "Baseline": 0}
+plugin_memory = {}
 
 PLUGINS_DIRECTORY = "plugin"
 
@@ -215,6 +216,9 @@ def get_plugin_info(plugin_name: str):
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
+            plugin_memory[plugin_name] = plugin_info[plugin_name]["plugin"]["memory"]
+            # print(plugin_info[plugin_name]["plugin"]["memory"])
+            store_data(f"{plugin_name}_memory", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
         return plugin_info[plugin_name]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
@@ -244,16 +248,22 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     else:
         memory_func = mac_gpu_memory
     
+    if plugin_name not in plugin_info.keys():
+        get_plugin_info(plugin_name)
+    
     available_memory = memory_func()
+    print(retrieve_data(f"{plugin_name}_memory"))
+
     if available_memory >= 0 and len(most_recent_use) > 0:
         if plugin_name in plugin_memory.keys():
-            while plugin_memory[plugin_name] > available_memory and len(most_recent_use) > 0:
+            mem_usage = retrieve_data(f"{plugin_name}_memory")["memory"]
+            print(f"Memory usage for {plugin_name}: {mem_usage}")
+            while mem_usage > available_memory and len(most_recent_use) > 0:
                 plugin_to_shutdown = most_recent_use.pop()
                 stop_plugin(plugin_to_shutdown)
                 time.sleep(1)
                 available_memory = memory_func() 
-        if plugin_name not in plugin_info.keys():
-            get_plugin_info(plugin_name)
+    
 
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
@@ -487,7 +497,7 @@ async def store_multiple_images(data):
     return img_id
 
 @app.put("/data/store/{key}")
-async def store_data(key: str, item: dict):
+def store_data(key: str, item: dict):
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
     value = json.dumps(dict(item))
@@ -497,7 +507,7 @@ async def store_data(key: str, item: dict):
     return {"message": "Data stored successfully"}
 
 @app.get("/data/retrieve/{key}")
-async def retrieve_data(key: str):
+def retrieve_data(key: str):
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
     cursor.execute("SELECT value FROM key_value_store WHERE key = ?", (key,))
