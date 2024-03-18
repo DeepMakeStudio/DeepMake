@@ -14,6 +14,7 @@ import base64
 import uuid
 import json
 import psutil
+from psutil import NoSuchProcess
 import requests
 import subprocess
 import numpy as np
@@ -365,25 +366,24 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
     else:
         port = result[plugin_name]["port"]
     endpoint = plugin_endpoints[plugin_name][endpoint]
-    inputs_string = ""
-    for input in [input for input in endpoint['inputs'] if "optional=true" not in endpoint['inputs'][input]]:
-        if input not in json_data.keys():
-            return {"status": "failed", "error": f"Missing required input {input}"}
-        inputs_string += str(json_data[input]) + "/"
-
-    for ct, input in enumerate([input for input in json_data.keys() if "optional=true" in endpoint['inputs'][input]]):
-        if ct == 0:
-            inputs_string += f"?{input}={str(json_data[input])}"
-        else:
-            inputs_string += f"&{input}={str(json_data[input])}"
-
-    url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
-
-    print(endpoint)
 
     if "method" not in endpoint.keys():
-        response = client.get(url, timeout=240).json()
-    elif endpoint['method'] == 'GET':
+        endpoint["method"] = "GET"
+
+    if endpoint['method'] == 'GET':
+        inputs_string = ""
+        for input in [input for input in endpoint['inputs'] if "optional=true" not in endpoint['inputs'][input]]:
+            if input not in json_data.keys():
+                return {"status": "failed", "error": f"Missing required input {input}"}
+            inputs_string += str(json_data[input]) + "/"
+
+        for ct, input in enumerate([input for input in json_data.keys() if "optional=true" in endpoint['inputs'][input]]):
+            if ct == 0:
+                inputs_string += f"?{input}={str(json_data[input])}"
+            else:
+                inputs_string += f"&{input}={str(json_data[input])}"
+
+        url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
         response = client.get(url, timeout=240).json()
     elif endpoint['method'] == 'PUT':
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/"
