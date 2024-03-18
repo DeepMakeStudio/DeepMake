@@ -210,12 +210,12 @@ def get_plugin_list():
 
 @app.get("/plugins/get_info/{plugin_name}")
 def get_plugin_info(plugin_name: str):
+    r = client.get(f"http://https://deepmake.com/plugins.json")
     if plugin_name in plugin_list: 
         if plugin_name not in plugin_info.keys():
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
-            r = client.get(f"http://https://deepmake.com/plugins.json")
             try:
                 plugin_info[plugin_name]["plugin"]["license"] = r.json()[plugin_name]["license"]
             except:
