@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Response
+from fastapi.responses import RedirectResponse
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
@@ -22,14 +23,30 @@ from time import sleep
 from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
+import sentry_sdk
+from sentry_sdk.integrations.huey import HueyIntegration
+from hashlib import md5
+import sqlite3    
+CONDA = "MiniConda3"
 
-CONDA = True
+def get_id(): # return md5 hash of uuid.getnode()
+    return md5(str(uuid.getnode()).encode()).hexdigest()
+
+sentry_sdk.init(
+    dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
+    traces_sample_rate=0.1,
+    profiles_sample_rate=0.1,
+    enable_tracing=True,
+    integrations=[
+        HueyIntegration(),
+    ],
+)
+sentry_sdk.set_user({"id": get_id()})
+sentry_sdk.set_tag("platform", sys.platform)
 
 global port_mapping
 global plugin_endpoints
 global storage_dictionary
-
-app = FastAPI()
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -51,7 +68,7 @@ client = requests.Session()
 port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
-plugin_memory = {"stable_diffusion": 4000, "bisenet": 400, "detection": 700, "landmarking": 700, "swap_face": 0, "baseline": 0}
+plugin_memory = {"Diffusers": 4000, "GroundingDINO": 3000, "Bisenet": 400, "Baseline": 0}
 
 PLUGINS_DIRECTORY = "plugin"
 
@@ -86,6 +103,13 @@ def fetch_image(img_id):
         raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
     return img_data
 
+@app.get("/get_main_pid/{pid}")
+def get_main_pid(pid):
+    if "main" in process_ids:
+        return {"status": "failed", "error": "Already received a pid"}
+    process_ids["main"] = int(pid)
+    return {"status": "success"}
+
 @app.on_event("startup")
 def startup():
     global plugin_list
@@ -93,6 +117,19 @@ def startup():
     load_plugins()
     global plugin_states
     plugin_states = {plugin: "INIT" for plugin in plugin_list}
+    init_db()  # Initialize the database
+
+def init_db():
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS key_value_store (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 def load_plugins():
     for folder in os.listdir(PLUGINS_DIRECTORY):
@@ -125,7 +162,10 @@ async def store_image(data):
 
 def available_gpu_memory():
     command = "nvidia-smi --query-gpu=memory.free --format=csv"
-    memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
+    try:
+        memory_free_info = subprocess.check_output(command.split()).decode('ascii').split('\n')[:-1][1:]
+    except: 
+        return -1
     memory_free_values = [int(x.split()[0]) for i, x in enumerate(memory_free_info)]
     return np.sum(memory_free_values)
 
@@ -144,6 +184,10 @@ def mac_gpu_memory():
 def new_job(job):
     jobs[job.id] = job
     running_jobs.append(job.id)
+
+@app.get("/")
+async def redirect_docs():
+    return RedirectResponse("/docs/")
 
 @app.get("/plugins/reload")
 async def reload_plugins():
@@ -206,14 +250,18 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
         memory_func = available_gpu_memory
     else:
         memory_func = mac_gpu_memory
-    
+    if plugin_name not in plugin_info.keys():
+        get_plugin_info(plugin_name)
     available_memory = memory_func()
-    while plugin_info[plugin_name]["plugin"]["memory_usage"] > available_memory:
-        plugin_to_shutdown = most_recent_use.pop()
-        stop_plugin(plugin_to_shutdown)
-        time.sleep(1)
-        available_memory = memory_func() 
+    if available_memory >= 0 and len(most_recent_use) > 0:
+        if plugin_name in plugin_memory.keys():
+            while plugin_memory[plugin_name] > available_memory and len(most_recent_use) > 0:
+                plugin_to_shutdown = most_recent_use.pop()
+                stop_plugin(plugin_to_shutdown)
+                time.sleep(1)
+                available_memory = memory_func() 
     
+
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
     plugin_states[plugin_name] = "STARTING"
@@ -233,9 +281,14 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     else:
         if CONDA:
             conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
-            p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+            if not os.path.isfile(conda_path):
+                conda_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "conda.exe")
+                activate_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "activate.bat")
+                p = subprocess.Popen(f"{activate_path}  && {conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+            else:
+                p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
         else:
-            p = subprocess.Popen(f"envs\plugins\python.exe -m uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+            p = subprocess.Popen(f"envs\\plugins\\python.exe -m uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
     pid = p.pid
     process_ids[plugin_name] = pid
 
@@ -256,20 +309,6 @@ def stop_plugin(plugin_name: str):
             plugin_states[plugin_name] = "STOPPED"
         
     return f"{plugin_name} stopped"
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    for plugin_name in process_ids.keys():
-        stop_plugin(plugin_name)
-    
-    if os.path.exists(os.path.join(storage_folder, "huey")):
-        shutil.rmtree(os.path.join(storage_folder, "huey"))
-    if os.path.exists(os.path.join(storage_folder, "huey_storage")):
-        shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
-    if os.path.exists(os.path.join(storage_folder, "huey.db")):
-        os.remove(os.path.join(storage_folder, "huey.db"))
-    if os.path.exists(os.path.join(storage_folder, "huey_storage.db")):
-        os.remove(os.path.join(storage_folder, "huey_storage.db"))
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
@@ -329,7 +368,7 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
 
     url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
 
-    response = client.get(url, timeout=120).json()
+    response = client.get(url, timeout=240).json()
     return response
 
 @app.get("/plugin/status/")
@@ -369,6 +408,36 @@ def get_running_jobs():
                 move_job(job)
     return {"running_jobs": running_jobs, "finished_jobs": finished_jobs}
 
+@app.get("/backend/shutdown")
+def shutdown():
+    for plugin_name in list(process_ids.keys()):
+        stop_plugin(plugin_name)
+    
+    if os.path.exists(os.path.join(storage_folder, "huey")):
+        shutil.rmtree(os.path.join(storage_folder, "huey"))
+    if os.path.exists(os.path.join(storage_folder, "huey_storage")):
+        shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
+    if os.path.exists(os.path.join(storage_folder, "huey.db")):
+        os.remove(os.path.join(storage_folder, "huey.db"))
+    if os.path.exists(os.path.join(storage_folder, "huey_storage.db")):
+        os.remove(os.path.join(storage_folder, "huey_storage.db"))
+    
+    stop_plugin("main")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    for plugin_name in list(process_ids.keys()):
+        stop_plugin(plugin_name)
+    
+    if os.path.exists(os.path.join(storage_folder, "huey")):
+        shutil.rmtree(os.path.join(storage_folder, "huey"))
+    if os.path.exists(os.path.join(storage_folder, "huey_storage")):
+        shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
+    if os.path.exists(os.path.join(storage_folder, "huey.db")):
+        os.remove(os.path.join(storage_folder, "huey.db"))
+    if os.path.exists(os.path.join(storage_folder, "huey_storage.db")):
+        os.remove(os.path.join(storage_folder, "huey_storage.db"))
+
 @app.put("/job")
 def add_job(job: Job):
     print("Received Job Payload:", job.dict())  # Print the received payload
@@ -390,9 +459,9 @@ def get_job(job_id: str):
     except Exception as e:
         if isinstance(e, KeyError):
             return {"status": "Job not found"}
-    print("moving job")
+    # print("moving job")
     move_job(job_id)
-    print("found job")
+    # print("found job")
     return job()
 
 @app.get("/image/get/{img_id}")
@@ -423,3 +492,34 @@ async def store_multiple_images(data):
     storage.put_data(img_id,img_data)
     storage.put_data(shape_id, np.array(shape).tobytes())
     return img_id
+
+@app.put("/data/store/{key}")
+async def store_data(key: str, item: dict):
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
+    cursor = conn.cursor()
+    value = json.dumps(dict(item))
+    cursor.execute("REPLACE INTO key_value_store (key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
+    conn.close()
+    return {"message": "Data stored successfully"}
+
+@app.get("/data/retrieve/{key}")
+async def retrieve_data(key: str):
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM key_value_store WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    data = json.loads(row[0])
+    if row:
+        return data
+    raise HTTPException(status_code=404, detail="Key not found")
+
+@app.delete("/data/delete/{key}")
+async def delete_data(key: str):
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM key_value_store WHERE key = ?", (key,))
+    conn.commit()
+    conn.close()
+    return {"message": "Data deleted successfully"}
