@@ -369,7 +369,7 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
     for input in [input for input in endpoint['inputs'] if "optional=true" not in endpoint['inputs'][input]]:
         if input not in json_data.keys():
             return {"status": "failed", "error": f"Missing required input {input}"}
-        inputs_string += json_data[input] + "/"
+        inputs_string += str(json_data[input]) + "/"
 
     for ct, input in enumerate([input for input in json_data.keys() if "optional=true" in endpoint['inputs'][input]]):
         if ct == 0:
@@ -379,7 +379,18 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
 
     url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
 
-    response = client.get(url, timeout=240).json()
+    print(endpoint)
+
+    if "method" not in endpoint.keys():
+        response = client.get(url, timeout=240).json()
+    elif endpoint['method'] == 'GET':
+        response = client.get(url, timeout=240).json()
+    elif endpoint['method'] == 'PUT':
+        url = f"http://127.0.0.1:{port}/{endpoint['call']}/"
+        response = client.put(url, json=json_data, timeout=240).json()
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported method: {endpoint['method']}")
+
     return response
 
 @app.get("/plugin/status/")
@@ -388,7 +399,7 @@ def get_all_plugin_status():
     
 @app.get("/plugin/status/{plugin_name}")
 def get_plugin_status(plugin_name: str):
-    status = plugin_states.get(plugin_name, "NOT FOUND")
+    status = plugin_states.get(plugin_name, "PLUGIN NOT FOUND")
     return {"plugin_name": plugin_name, "status": status}
 
 @app.post("/plugin_callback/{plugin_name}/{status}")
