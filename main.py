@@ -28,6 +28,7 @@ from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
 import asyncio
+from huey.exceptions import TaskException
 CONDA = "MiniConda3"
 
 def get_id(): # return md5 hash of uuid.getnode()
@@ -216,9 +217,10 @@ def get_plugin_info(plugin_name: str):
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
-            plugin_memory[plugin_name] = plugin_info[plugin_name]["plugin"]["memory"]
             # print(plugin_info[plugin_name]["plugin"]["memory"])
-            store_data(f"{plugin_name}_memory", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
+            print(type(plugin_info[plugin_name]["plugin"]["memory"]))
+            store_data(f"{plugin_name}_memory", {"memory": [plugin_info[plugin_name]["plugin"]["memory"]]})
+            store_data(f"{plugin_name}_model_memory", {"memory": plugin_info[plugin_name]["plugin"]["model_memory"]})
         return plugin_info[plugin_name]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
@@ -243,10 +245,7 @@ def set_plugin_config(plugin_name: str, config: dict):
 
 @app.get("/plugins/start_plugin/{plugin_name}")
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
-    if sys.platform != "darwin":
-        memory_func = available_gpu_memory
-    else:
-        memory_func = mac_gpu_memory
+    memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
     
     if plugin_name not in plugin_info.keys():
         get_plugin_info(plugin_name)
@@ -256,14 +255,14 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
 
     if available_memory >= 0 and len(most_recent_use) > 0:
         if plugin_name in plugin_memory.keys():
-            mem_usage = retrieve_data(f"{plugin_name}_memory")["memory"]
+            mem_usage = np.mean(retrieve_data(f"{plugin_name}_memory")["memory"])
             print(f"Memory usage for {plugin_name}: {mem_usage}")
             while mem_usage > available_memory and len(most_recent_use) > 0:
                 plugin_to_shutdown = most_recent_use.pop()
                 stop_plugin(plugin_to_shutdown)
                 time.sleep(1)
                 available_memory = memory_func() 
-    
+    store_data(f"{plugin_name}_available", {"memory": int(available_memory)})
 
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
@@ -334,8 +333,11 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
         if input not in plugin_endpoints[plugin_name][endpoint]['inputs'].keys():
             warnings.append(f"Input '{input}' not used by endpoint '{endpoint}'")
             del json_data[input]
-    
+    memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
+    available_memory = memory_func()
+
     job = huey_call_endpoint(plugin_name, endpoint, json_data, port_mapping, plugin_endpoints)
+    store_data(f"{job.id}_available", {"memory": int(available_memory), "plugin": plugin_name, "plugin_states": plugin_states, "running_jobs": get_running_jobs()["running_jobs"]})
     if plugin_name in most_recent_use:
         most_recent_use.remove(plugin_name)
     most_recent_use.insert(0, plugin_name)
@@ -387,11 +389,24 @@ def get_plugin_status(plugin_name: str):
 def plugin_callback(plugin_name: str, status: str):
     running = status == "True"
     current_state = plugin_states.get(plugin_name)
+    if sys.platform != "darwin":
+        memory_func = available_gpu_memory
+    else:
+        memory_func = mac_gpu_memory
     print(f"Callback received for plugin: {plugin_name}. Current state: {current_state}")
-
     if running:
         plugin_states[plugin_name] = "RUNNING"
         print(f"{plugin_name} is now in RUNNING state")
+        for plugin in plugin_states.keys():
+            if plugin_states[plugin] == "STARTING" or len(running_jobs) > 0:
+                return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
+        initial_memory = retrieve_data(f"{plugin_name}_available")["memory"]
+        memory_left = memory_func()    
+        model_memory = initial_memory - memory_left
+        
+        store_data(f"{plugin_name}_model_memory", {"memory": int(model_memory)})
+        # model_memory = store_data(f"{plugin_name}_model_memory")["memory"]
+
         return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
     else:
         print(f"{plugin_name} failed to start")
@@ -402,13 +417,15 @@ def plugin_callback(plugin_name: str, status: str):
 def get_running_jobs():
     for job in running_jobs:
         try:
-            jobs[job].get_result()
-            move_job(job)
+            job = jobs[job]
+            print(job())
+            if job() is not None:
+                print("move job")
+                move_job(job.id)
         except Exception as e:
-            if isinstance(e, ResultMissing):
-                continue
-            elif isinstance(e, ResultFailure):
-                move_job(job)
+            print(e)
+            if isinstance(e, TaskException):
+                move_job(job.id)
     return {"running_jobs": running_jobs, "finished_jobs": finished_jobs}
 
 @app.get("/backend/shutdown")
@@ -447,10 +464,39 @@ def add_job(job: Job):
     new_job(job)
     return {"message": f"Job {job.message_id} added"}
 
+@huey.post_execute()
+def record_memory(task, task_value, exc):
+    if task_value is not None:
+        task_data = retrieve_data(f"{task.id}_available")
+
+        plugin_states = task_data["plugin_states"]
+        running_jobs = task_data["running_jobs"]
+        for plugin in plugin_states.keys():
+            if plugin_states[plugin] == "STARTING" or len(running_jobs) > 1:
+                return task_value
+        initial_memory = task_data["memory"]
+        plugin_name = task_data["plugin"]
+        plugin_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
+
+        memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
+        memory_left = memory_func()
+        inference_memory = int(initial_memory - memory_left + plugin_model_memory)
+        mem_list = retrieve_data(f"{plugin_name}_memory")["memory"]
+        mem_list.append(inference_memory)
+        store_data(f"{plugin_name}_memory", {"memory": mem_list})
+        delete_data(f"{task.id}_available")
+        return task_value
+    return task_value
+
 def move_job(job_id):
+    print("moving job")
+    print(job_id)
+    print(running_jobs)
     if job_id in running_jobs:
+        
         running_jobs.remove(job_id) 
         finished_jobs.append(job_id)
+        print("Job moved")
 
 @app.get("/job/{job_id}")
 def get_job(job_id: str):
@@ -498,6 +544,7 @@ async def store_multiple_images(data):
 
 @app.put("/data/store/{key}")
 def store_data(key: str, item: dict):
+    print(key,item)
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
     value = json.dumps(dict(item))
