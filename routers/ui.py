@@ -51,7 +51,8 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
 
 @router.get("/ui/plugin_manager/uninstall/{plugin_name}", tags=["ui"])
 async def uninstall_plugin(plugin_name: str):
-    folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
+    folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
+    print(folder_path)
     if sys.platform != "win32":
         p = subprocess.Popen(f"rm -rf {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
