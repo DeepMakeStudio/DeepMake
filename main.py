@@ -221,6 +221,10 @@ def get_plugin_info(plugin_name: str):
             print(type(plugin_info[plugin_name]["plugin"]["memory"]))
             store_data(f"{plugin_name}_memory", {"memory": [plugin_info[plugin_name]["plugin"]["memory"]]})
             store_data(f"{plugin_name}_model_memory", {"memory": plugin_info[plugin_name]["plugin"]["model_memory"]})
+            store_data(f"{plugin_name}_memory_mean", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
+            store_data(f"{plugin_name}_memory_max", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
+            store_data(f"{plugin_name}_memory_min", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
+
         return plugin_info[plugin_name]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
@@ -255,7 +259,7 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
 
     if available_memory >= 0 and len(most_recent_use) > 0:
         if plugin_name in plugin_memory.keys():
-            mem_usage = np.mean(retrieve_data(f"{plugin_name}_memory")["memory"])
+            mem_usage = retrieve_data(f"{plugin_name}_memory_mean")["memory"]
             print(f"Memory usage for {plugin_name}: {mem_usage}")
             while mem_usage > available_memory and len(most_recent_use) > 0:
                 plugin_to_shutdown = most_recent_use.pop()
@@ -484,6 +488,9 @@ def record_memory(task, task_value, exc):
         mem_list = retrieve_data(f"{plugin_name}_memory")["memory"]
         mem_list.append(inference_memory)
         store_data(f"{plugin_name}_memory", {"memory": mem_list})
+        store_data(f"{plugin_name}_memory_mean", {"memory": int(np.mean(mem_list))})
+        store_data(f"{plugin_name}_memory_max", {"memory": int(np.max(mem_list))})
+        store_data(f"{plugin_name}_memory_min", {"memory": int(np.min(mem_list))})
         delete_data(f"{task.id}_available")
         return task_value
     return task_value
