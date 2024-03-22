@@ -6,6 +6,7 @@ import sys
 import requests
 import subprocess
 import json 
+import webbrowser
 
 client = requests.Session()
 
@@ -301,10 +302,12 @@ class PluginManagerGUI(QWidget):
                         self.install_button_creation(plugin_name)
                 elif col == 4:
                     if plugin_name in os.listdir(fastapi_launcher_path):
-                        button = QPushButton(f"Manage")
-                        button.clicked.connect(lambda _, name = plugin_name: self.uninstall_plugin(name))
-                        self.button_dict[plugin_name] = button
-                        self.tableWidget.setCellWidget(row, col, button)                    
+                        if "url" in self.plugin_dict["plugin"][plugin_name].keys():
+
+                            button = QPushButton(f"Manage")
+                            button.clicked.connect(lambda _, name = plugin_name: self.uninstall_plugin(name))
+                            self.button_dict[plugin_name] = button
+                            self.tableWidget.setCellWidget(row, col, button)                    
                     else:
                         self.manage(plugin_name)
                         
@@ -321,8 +324,12 @@ class PluginManagerGUI(QWidget):
 
     def install_button_creation(self, plugin_name):
         row = list(self.plugin_dict['plugin'].keys()).index(plugin_name)
-        button = QPushButton(f"Install")
-        button.clicked.connect(lambda _, name = plugin_name: self.install_plugin(name))
+        if "url" not in self.plugin_dict["plugin"][plugin_name].keys():
+            button = QPushButton(f"Subscribe")
+            button.clicked.connect(lambda: webbrowser.open("https://deepmake.com"))
+        else:
+            button = QPushButton(f"Install")
+            button.clicked.connect(lambda _, name = plugin_name: self.install_plugin(name))
         self.button_dict[plugin_name] = button
         self.tableWidget.setItem(row, 3, QTableWidgetItem(" "))
         self.tableWidget.setCellWidget(row, 3, button)
