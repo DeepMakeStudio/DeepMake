@@ -21,28 +21,30 @@ if not os.path.exists(storage_folder):
 
 storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
 
-def fetch_data(data_id):
-    data = storage.peek_data(data_id)
-    if data == huey.constants.EmptyData:
-        raise HTTPException(status_code=400, detail=f"No data found for id {data_id}")
-    return data
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
     if img_data == huey.constants.EmptyData:
-        print("No image found for id", img_id)
+        # print("No image found for id", img_id)
         raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
+    return img_data
+
+def fetch_pil_image(img_id):
+    img_data = fetch_image(img_id)
     return Image.open(BytesIO(img_data))
 
-def store_image(img_data: Image, img_id=None):
+def store_pil_image(img, img_id=None):
+    output = BytesIO()
+    img.save(output, format="PNG")
+    img_data = output.getvalue()
+    return store_image(img_data, img_id)
+
+def store_image(img_data, img_id=None):
     if img_id is None:
       img_id = str(uuid.uuid4())
-    output = BytesIO()
-    img_data.save(output, format="PNG")
-
-    # if not isinstance(img_data, bytes):
-    #     raise HTTPException(status_code=400, detail=f"Data must be stored in bytes")
-    storage.put_data(img_id, output.getvalue())
+    if not isinstance(img_data, bytes):
+        raise HTTPException(status_code=400, detail=f"Data must be stored in bytes")
+    storage.put_data(img_id, img_data)
     return img_id
 
 def store_multiple_images(img_data):
@@ -53,8 +55,20 @@ def store_multiple_images(img_data):
     storage.put_data(video_id, bytes_list)
     return video_id
 
-def fetch_multiple_images(img_id_list):
-    return [fetch_image(img_id) for img_id in img_id_list]
+def store_multiple(data_list, func, img_ids=None):
+    list_id = str(uuid.uuid4())
+    if img_ids is None:
+        img_ids = [func(img) for img in data_list]
+    elif len(data_list) == len(img_ids):
+        img_ids = [func(img, img_id) for img, img_id in zip(data_list, img_ids)]
+    elif type(img_ids) == str:
+        img_ids = [func(img, img_ids + str(i)) for i, img in enumerate(data_list)]
+    bytes_list = bytes(";".join(img_ids).encode("utf-8"))
+    storage.put_data(list_id, bytes_list)
+    return list_id
+
+def fetch_multiple(func, id_list):
+    return [func(img_id) for img_id in id_list]
 
 class Plugin():
     """
