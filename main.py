@@ -228,7 +228,6 @@ def get_plugin_info(plugin_name: str):
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
             # print(plugin_info[plugin_name]["plugin"]["memory"])
-            print(type(plugin_info[plugin_name]["plugin"]["memory"]))
             store_data(f"{plugin_name}_memory", {"memory": [plugin_info[plugin_name]["plugin"]["memory"]]})
             store_data(f"{plugin_name}_model_memory", {"memory": plugin_info[plugin_name]["plugin"]["model_memory"]})
             store_data(f"{plugin_name}_memory_mean", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
@@ -282,7 +281,6 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     if available_memory >= 0 and len(most_recent_use) > 0:
         if plugin_name in plugin_memory.keys():
             mem_usage = retrieve_data(f"{plugin_name}_memory_mean")["memory"]
-            print(f"Memory usage for {plugin_name}: {mem_usage}")
             while mem_usage > available_memory and len(most_recent_use) > 0:
                 plugin_to_shutdown = most_recent_use.pop()
                 stop_plugin(plugin_to_shutdown)
@@ -465,12 +463,9 @@ def get_running_jobs():
     for job in running_jobs:
         try:
             job = jobs[job]
-            print(job())
             if job() is not None:
-                print("move job")
                 move_job(job.id)
         except Exception as e:
-            print(e)
             if isinstance(e, TaskException):
                 move_job(job.id)
     return {"running_jobs": running_jobs, "finished_jobs": finished_jobs}
@@ -541,18 +536,13 @@ def record_memory(task, task_value, exc):
     return task_value
 
 def move_job(job_id):
-    print("moving job")
-    print(job_id)
-    print(running_jobs)
     if job_id in running_jobs:
         
         running_jobs.remove(job_id) 
         finished_jobs.append(job_id)
-        print("Job moved")
 
 @app.get("/job/{job_id}")
 def get_job(job_id: str):
-    print("getting job")
     try:
         job = jobs[job_id]
         if job() is None:
@@ -600,7 +590,6 @@ async def store_multiple_images(data):
 
 @app.put("/data/store/{key}")
 def store_data(key: str, item: dict):
-    print(key,item)
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
     value = json.dumps(dict(item))
