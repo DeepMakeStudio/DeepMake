@@ -1,0 +1,14 @@
+QPushButton:pressed {{
+background-color : #7b3bff;
+}}
+
+QPushButton {{
+color: {QTMATERIAL_SECONDARYCOLOR};
+text-transform: none;
+background-color: #7b3bff;
+border: #7b3bff;
+}}
+
+.big_button {{
+height: 64px;
+}}
