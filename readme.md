@@ -26,11 +26,9 @@ It should handle all the installation steps for the backend and you can continue
 
 #### Windows
 
-Our installer for Windows is currently in Alpha and is unsigned. It includes a copy of Python which many antiviruses tag as malicious. To use it you may need to bypass your antivirus.
+For windows, Download the installer and run it to install DeepMake.
 
-[Download the Installer](https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Installer_Win.exe)
-
-If you're worried and don't want to override your antivirus you can do the manual install instead.
+[Download the Installer](https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/DeepMake_Win_Installer.exe)
 
 ### Manual Install
 If you used the easy installer, you don't need to manually install, but if you do not want to install using the installer, you can install manually.
