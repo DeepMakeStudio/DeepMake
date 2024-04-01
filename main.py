@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Response
+from fastapi import FastAPI, HTTPException, File, UploadFile, Response, Form
 from fastapi.responses import RedirectResponse
 from typing import Optional, List
 from pydantic import BaseModel
@@ -24,6 +24,7 @@ from huey import SqliteHuey
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
 import sentry_sdk
+from sentry_sdk import capture_message, configure_scope
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
@@ -548,3 +549,26 @@ def update():
         sys.exit(app.exec())
     except:
         pass
+
+@app.post("/ui/report-issue/")
+async def report_issue(description: str = Form(...), log_file_path: str = Form(None)):
+    capture_message(description)  # Log the basic description first
+
+    if log_file_path and os.path.isfile(log_file_path):
+        try:
+            with open(log_file_path, 'r') as file:
+                log_contents = file.read()
+            # Use a scope to attach additional data to Sentry events
+            with configure_scope() as scope:
+                scope.set_extra("log_contents", log_contents)
+                capture_message("Log file attached")  # This message will include the log_contents extra data
+        except Exception as e:
+            # Log the exception with a scope, if needed
+            with configure_scope() as scope:
+                scope.set_extra("log_file_path", log_file_path)
+                capture_message(f"Error reading log file: {e}")
+            raise HTTPException(status_code=500, detail="Error reading log file")
+    else:
+        capture_message("No log file was attached")
+
+    return {"message": "Issue reported successfully"}
