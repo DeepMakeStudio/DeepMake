@@ -29,6 +29,9 @@ import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
+
+from auth_handler import auth_handler
+
 CONDA = "MiniConda3"
 
 def get_id(): # return md5 hash of uuid.getnode()
@@ -100,6 +103,8 @@ jobs = {}
 most_recent_use = []
 
 plugin_info = {}
+
+auth = auth_handler()
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
@@ -551,3 +556,35 @@ async def delete_data(key: str):
     conn.commit()
     conn.close()
     return {"message": "Data deleted successfully"}
+
+@app.get("/login/status")
+async def get_login_status():
+    return {"logged_in": auth.logged_in}
+
+@app.post("/login/login")
+async def login(username: str, password: str):
+    if auth.login_with_credentials(username, password):
+        return {"status": "success", "message": "Logged in successfully"}
+    else:
+        return {"status": "failed", "message": "Login failed"}
+
+@app.post("/login/logout")
+async def logout():
+    auth.logout()
+    return {"status": "success", "message": "Logged out successfully"}
+
+@app.get("/login/username")
+async def get_username():
+    return {"username": auth.username}
+
+@app.get("/login/get_url")
+async def get_file(url: str):
+    return auth.get_url(url)
+
+@app.get("/login/check_login")
+async def check_login():
+    if auth.logged_in:
+        user = auth.get_user_info()
+        return {'logged_in': True, 'email': user['email'], 'roles': user['app_metadata']['roles']}
+    else:
+        return {'logged_in': False}
