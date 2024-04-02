@@ -28,11 +28,7 @@ from huey.exceptions import TaskException
 import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
-import sqlite3    
-from PyQt6.QtWidgets import QApplication
-from qt_material import apply_stylesheet
-from update_gui import Updater
-from routers import ui
+import sqlite3
 
 import asyncio
 from huey.exceptions import TaskException
@@ -74,7 +70,6 @@ storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'h
 huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 
 app = FastAPI()
-app.include_router(ui.router)
 client = requests.Session()
 
 port_mapping = {"main": 8000}
@@ -307,10 +302,8 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
         if CONDA:
             if os.getenv('CONDA_EXE'):
                 conda_path = os.getenv('CONDA_EXE')
-            elif sys.platform == "win32":
-                conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
             else:
-                conda_path = subprocess.check_output("echo $CONDA_EXE", shell=True)[:-2].decode()
+                conda_path = subprocess.check_output("echo %CONDA_EXE%", shell=True)[:-2].decode()
             if not os.path.isfile(conda_path):
                 conda_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "conda.exe")
                 activate_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "activate.bat")
@@ -349,6 +342,7 @@ def stop_plugin(plugin_name: str):
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
+    get_plugin_list()
     print(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
@@ -618,29 +612,3 @@ def delete_data(key: str):
     conn.commit()
     conn.close()
     return {"message": "Data deleted successfully"}
-
-# @app.get("/ui/plugin_manager")
-# def plugin_manager():
-    
-#     app = QApplication(sys.argv)
-#     window = Window()
-#     apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
-#     window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
-#     window.show()
-#     try:
-#         sys.exit(app.exec())
-#     except:
-#         pass
-
-@app.get("/ui/update")
-def update():
-    
-    app = QApplication(sys.argv)
-    window = Updater()
-    apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
-    window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
-    window.show()
-    try:
-        sys.exit(app.exec())
-    except:
-        pass
