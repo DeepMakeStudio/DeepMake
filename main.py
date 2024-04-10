@@ -64,6 +64,8 @@ elif sys.platform == "linux":
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
+if os.path.exists(os.path.join(storage_folder,'huey.db')):
+    os.remove(os.path.join(storage_folder,'huey.db'))
 
 storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
 
@@ -406,7 +408,11 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
                 inputs_string += f"&{input}={str(json_data[input])}"
 
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
-        response = client.get(url, timeout=240).json()
+        response = client.get(url, timeout=240)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
     elif endpoint['method'] == 'PUT':
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/"
         response = client.put(url, json=json_data, timeout=240).json()
@@ -574,13 +580,28 @@ async def store_multiple_images(data):
     for image in data:
         image_bytes = await image.read()
         img_data.append(Image.open(BytesIO(image_bytes)))
-    shape = np.array(img_data).shape
-    img_data = np.array(img_data).tobytes()
-    img_id = str(uuid.uuid4())
-    shape_id = img_id + "_shape"
-    storage.put_data(img_id,img_data)
-    storage.put_data(shape_id, np.array(shape).tobytes())
+    img_id = store_multiple(img_data, store_pil_image)
     return img_id
+
+def store_pil_image(img, img_id=None):
+    output = BytesIO()
+    img.save(output, format="PNG")
+    img_data = output.getvalue()
+    img_id = str(uuid.uuid4())
+    storage.put_data(img_id,img_data)
+    return img_id
+
+def store_multiple(data_list, func, img_ids=None):
+    list_id = str(uuid.uuid4())
+    if img_ids is None:
+        img_ids = [func(img) for img in data_list]
+    elif len(data_list) == len(img_ids):
+        img_ids = [func(img, img_id) for img, img_id in zip(data_list, img_ids)]
+    elif type(img_ids) == str:
+        img_ids = [func(img, img_ids + str(i)) for i, img in enumerate(data_list)]
+    bytes_list = bytes(";".join(img_ids).encode("utf-8"))
+    storage.put_data(list_id, bytes_list)
+    return list_id
 
 @app.put("/data/store/{key}")
 def store_data(key: str, item: dict):
