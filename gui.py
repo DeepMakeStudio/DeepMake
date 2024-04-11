@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QWidget, QPushButton, QLineEdit, QComboBox, QSlider, QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox, QDialog, QScrollArea, QDialogButtonBox, QLabel, QFileDialog, QTableWidget, QHeaderView, QTableWidgetItem, QApplication, QProgressBar, QComboBox, QHBoxLayout, QListWidget, QHeaderView, QTableWidget, QVBoxLayout, QTableWidgetItem, QDialog, QScrollArea, QDialogButtonBox, QSlider, QSizePolicy, QCheckBox, QLabel, QLineEdit, QFileDialog
-from PyQt6.QtCore import Qt, pyqtSignal, QObject, QThread
+from PySide6.QtWidgets import QWidget, QPushButton, QLineEdit, QComboBox, QSlider, QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox, QDialog, QScrollArea, QDialogButtonBox, QLabel, QFileDialog, QTableWidget, QHeaderView, QTableWidgetItem, QApplication, QProgressBar, QComboBox, QHBoxLayout, QListWidget, QHeaderView, QTableWidget, QVBoxLayout, QTableWidgetItem, QDialog, QScrollArea, QDialogButtonBox, QSlider, QSizePolicy, QCheckBox, QLabel, QLineEdit, QFileDialog
+from PySide6.QtCore import Qt, Signal, QObject, QThread
 import os
 fastapi_launcher_path = os.path.join(os.path.dirname(__file__), "plugin")
 import sys
@@ -13,8 +13,8 @@ client = requests.Session()
 class setWorker(QObject):
     name = ""
     output_config = {}
-    finished = pyqtSignal()
-    # progress = pyqtSignal(int)
+    finished = Signal()
+    # progress = Signal(int)
     def run(self):
         """Long-running task."""
         r = client.put(f"http://127.0.0.1:8000/plugins/set_config/{self.name}", json = self.output_config)
@@ -231,8 +231,8 @@ class ConfigGUI(QWidget):
 
 class Worker(QObject):
     popen_string = " "
-    finished = pyqtSignal()
-    # progress = pyqtSignal(int)
+    finished = Signal()
+    # progress = Signal(int)
     def run(self):
         """Long-running task."""
         if sys.platform != "win32":

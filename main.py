@@ -29,7 +29,7 @@ import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
 from update_gui import Updater
 from routers import ui

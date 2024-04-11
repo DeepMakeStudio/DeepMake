@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 import sys
 from qt_material import apply_stylesheet
 import os
