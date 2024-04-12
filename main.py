@@ -408,7 +408,7 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
                 inputs_string += f"&{input}={str(json_data[input])}"
 
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
-        response = client.get(url, timeout=240)
+        response = client.get(url)
         if response.status_code == 200:
             return response.json()
         else:
