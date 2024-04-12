@@ -210,7 +210,10 @@ def get_plugin_list():
 
 @app.get("/plugins/get_info/{plugin_name}")
 def get_plugin_info(plugin_name: str):
-    r = client.get(f"https://deepmake.com/plugins.json")
+    try:
+        r = client.get(f"https://memberpage3--rad-malabi-7c1e1d.netlify.app/plugins.json")
+    except:
+        raise HTTPException(status_code=404, detail="Must be logged to use plugins")
     if plugin_name in plugin_list: 
         if plugin_name not in plugin_info.keys():
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
