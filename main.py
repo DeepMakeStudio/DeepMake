@@ -56,6 +56,7 @@ elif sys.platform == "darwin":
     storage_folder = os.path.join(os.getenv('HOME'),"Library","Application Support","DeepMake")
 elif sys.platform == "linux":
     storage_folder = os.path.join(os.getenv('HOME'),".local", "DeepMake")
+# exit()
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
@@ -212,18 +213,30 @@ def get_plugin_list():
 
 @app.get("/plugins/get_info/{plugin_name}")
 def get_plugin_info(plugin_name: str):
+    try:
+        r = client.get(f"https://memberpage3--rad-malabi-7c1e1d.netlify.app/plugins.json")
+    except:
+        raise HTTPException(status_code=404, detail="Must be logged to use plugins")
+    
     if plugin_name in plugin_list: 
         if plugin_name not in plugin_info.keys():
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
             # print(plugin_info[plugin_name]["plugin"]["memory"])
-            print(type(plugin_info[plugin_name]["plugin"]["memory"]))
-            store_data(f"{plugin_name}_memory", {"memory": [plugin_info[plugin_name]["plugin"]["memory"]]})
+            print(r.json()[plugin_name]["vram"])
+            initial_value = int(r.json()[plugin_name]["vram"].split(" ")[0])
+            mult = 1
+            if "GB" in r.json()[plugin_name]:
+                mult = 1024
+            initial_value *= mult
+            print(type(r.json()[plugin_name]["vram"]))
+            
+            store_data(f"{plugin_name}_memory", {"memory": [initial_value]})
             store_data(f"{plugin_name}_model_memory", {"memory": plugin_info[plugin_name]["plugin"]["model_memory"]})
-            store_data(f"{plugin_name}_memory_mean", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
-            store_data(f"{plugin_name}_memory_max", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
-            store_data(f"{plugin_name}_memory_min", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
+            store_data(f"{plugin_name}_memory_mean", {"memory": initial_value})
+            store_data(f"{plugin_name}_memory_max", {"memory": initial_value})
+            store_data(f"{plugin_name}_memory_min", {"memory": initial_value})
 
         return plugin_info[plugin_name]
     else:
