@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QScreen
 import sys
-from qt_material import apply_stylesheet
 import os
 import subprocess
 # from test import ConfigGUI
@@ -9,14 +9,19 @@ import subprocess
 from gui import ConfigGUI, PluginManagerGUI, Updater
 
 router = APIRouter()
-
+app = None
 
 @router.get("/ui/plugin_manager", tags=["ui"])
 def plugin_manager():
-    app = QApplication(sys.argv)
+    global app
+    if app is None:
+        app = QApplication(sys.argv)
     window = PluginManagerGUI()
-    apply_stylesheet(app, theme='dark_purple.xml')
     window.show()
+    center = QScreen.availableGeometry(QApplication.primaryScreen()).center()
+    geo = window.frameGeometry()
+    geo.moveCenter(center)
+    window.move(geo.topLeft())
     try:
         sys.exit(app.exec())
     except:
@@ -24,9 +29,10 @@ def plugin_manager():
 
 @router.get("/ui/configure/{plugin_name}", tags=["ui"])
 def plugin_config_ui(plugin_name: str):
-    app = QApplication(sys.argv)
+    global app
+    if app is None:
+        app = QApplication(sys.argv)
     window = ConfigGUI(plugin_name)
-    apply_stylesheet(app, theme='dark_purple.xml')
     window.show()
     try:
         sys.exit(app.exec())
@@ -37,10 +43,13 @@ def plugin_config_ui(plugin_name: str):
 async def install_plugin(plugin_name: str, plugin_dict: dict):
     url = plugin_dict["plugin"][plugin_name]["url"] + ".git"
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
+    plugin_folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin")
     if sys.platform != "win32":
-        p = subprocess.Popen(f"git clone {url} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # p = subprocess.Popen(f"git clone {url} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(f"unzip {plugin_name}.zip -d {plugin_folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
-        p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(f"tar -xf {plugin_name}.zip -C {plugin_folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     print(out, err)
     if "already exists" in err.decode("utf-8"):
@@ -76,10 +85,15 @@ def update_plugin(plugin_name: str, version: str):
 
 @router.get("/ui/updater", tags=["ui"])
 def update_gui():
-    app = QApplication(sys.argv)
+    global app
+    if app is None:
+        app = QApplication(sys.argv)
     window = Updater()
-    apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
     window.show()
+    center = QScreen.availableGeometry(QApplication.primaryScreen()).center()
+    geo = window.frameGeometry()
+    geo.moveCenter(center)
+    window.move(geo.topLeft())
     try:
         sys.exit(app.exec())
     except:

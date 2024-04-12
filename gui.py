@@ -30,8 +30,8 @@ class ConfigGUI(QWidget):
         super().__init__() 
         self.name = plugin_name
         self.title = f"{plugin_name} Configuration"
-        self.left = 0
-        self.top = 0
+        self.left = 100
+        self.top = 100
         self.width = 800
         self.height = 300
         self.setWindowTitle(self.title) 
@@ -252,7 +252,7 @@ class PluginManagerGUI(QWidget):
         self.width = 1000
         self.height = 300
         self.setWindowTitle(self.title) 
-        self.setGeometry(self.left, self.top, self.width, self.height) 
+        self.setGeometry(100, 100, self.width, self.height) 
         # self.setStyleSheet( "color: white; border-color: #7b3bff")
         r = client.get(f"http://127.0.0.1:8000/plugins/get_list")
    
@@ -505,7 +505,7 @@ class Updater(QWidget):
         super().__init__()
         # self.name = plugin_name
         self.setWindowTitle("Update")
-        self.setGeometry(0, 0, 500, 200) 
+        self.setGeometry(100, 100, 500, 200) 
 
 
         # self.button = QPushButton("Uninstall")
