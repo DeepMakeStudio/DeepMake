@@ -18,10 +18,8 @@ def plugin_manager():
         app = QApplication(sys.argv)
     window = PluginManagerGUI()
     window.show()
-    center = QScreen.availableGeometry(QApplication.primaryScreen()).center()
-    geo = window.frameGeometry()
-    geo.moveCenter(center)
-    window.move(geo.topLeft())
+    center_screen(window)
+
     try:
         sys.exit(app.exec())
     except:
@@ -34,6 +32,8 @@ def plugin_config_ui(plugin_name: str):
         app = QApplication(sys.argv)
     window = ConfigGUI(plugin_name)
     window.show()
+    center_screen(window)
+
     try:
         sys.exit(app.exec())
     except:
@@ -90,12 +90,15 @@ def update_gui():
         app = QApplication(sys.argv)
     window = Updater()
     window.show()
-    center = QScreen.availableGeometry(QApplication.primaryScreen()).center()
-    geo = window.frameGeometry()
-    geo.moveCenter(center)
-    window.move(geo.topLeft())
+    center_screen(window)
     try:
         sys.exit(app.exec())
     except:
         pass
 
+
+def center_screen(screen):
+    center = QScreen.availableGeometry(QApplication.primaryScreen()).center()
+    geo = screen.frameGeometry()
+    geo.moveCenter(center)
+    screen.move(geo.topLeft())
