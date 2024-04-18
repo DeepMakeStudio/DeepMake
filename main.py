@@ -245,6 +245,11 @@ def get_plugin_info(plugin_name: str):
             store_data(f"{plugin_name}_memory_max", {"memory": initial_value})
             store_data(f"{plugin_name}_memory_min", {"memory": initial_value})
 
+            try:
+                plugin_info[plugin_name]["plugin"]["license"] = r.json()[plugin_name]["license"]
+            except:
+                plugin_info[plugin_name]["plugin"]["license"] = "Not Found"
+                
         return plugin_info[plugin_name]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
