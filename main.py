@@ -229,7 +229,7 @@ def get_plugin_info(plugin_name: str):
             plugin_endpoints[plugin_name] = plugin.endpoints
             # print(plugin_info[plugin_name]["plugin"]["memory"])
             store_data(f"{plugin_name}_memory", {"memory": [plugin_info[plugin_name]["plugin"]["memory"]]})
-            store_data(f"{plugin_name}_model_memory", {"memory": plugin_info[plugin_name]["plugin"]["model_memory"]})
+            # store_data(f"{plugin_name}_model_memory", {"memory": plugin_info[plugin_name]["plugin"]["model_memory"]})
             store_data(f"{plugin_name}_memory_mean", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
             store_data(f"{plugin_name}_memory_max", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
             store_data(f"{plugin_name}_memory_min", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
@@ -252,13 +252,13 @@ def set_plugin_config(plugin_name: str, config: dict):
     if plugin_name in plugin_list:
         memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
         available_memory = memory_func() 
-        current_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
-        initial_memory = available_memory + current_model_memory
+        # current_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
+        # initial_memory = available_memory + current_model_memory
         port = port_mapping[plugin_name]
         r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
-        after_memory = memory_func()
-        new_model_memory = initial_memory - after_memory
-        store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
+        # after_memory = memory_func()
+        # new_model_memory = initial_memory - after_memory
+        # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
         return r.json()
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
@@ -449,7 +449,7 @@ def plugin_callback(plugin_name: str, status: str):
         memory_left = memory_func()    
         model_memory = initial_memory - memory_left
         
-        store_data(f"{plugin_name}_model_memory", {"memory": int(model_memory)})
+        # store_data(f"{plugin_name}_model_memory", {"memory": int(model_memory)})
         # model_memory = store_data(f"{plugin_name}_model_memory")["memory"]
 
         return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
@@ -520,11 +520,13 @@ def record_memory(task, task_value, exc):
                 return task_value
         initial_memory = task_data["memory"]
         plugin_name = task_data["plugin"]
-        plugin_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
+        # plugin_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
 
         memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
         memory_left = memory_func()
-        inference_memory = int(initial_memory - memory_left + plugin_model_memory)
+        # inference_memory = int(initial_memory - memory_left + plugin_model_memory)
+        inference_memory = int(initial_memory - memory_left)
+
         mem_list = retrieve_data(f"{plugin_name}_memory")["memory"]
         mem_list.append(inference_memory)
         store_data(f"{plugin_name}_memory", {"memory": mem_list})
