@@ -1,0 +1,20 @@
+{
+    "logs": [
+      {
+        "timestamp": "2024-04-01T12:00:00",
+        "level": "INFO",
+        "message": "Application started successfully."
+      },
+      {
+        "timestamp": "2024-04-01T12:10:00",
+        "level": "WARNING",
+        "message": "An unexpected condition was encountered."
+      },
+      {
+        "timestamp": "2024-04-01T12:15:00",
+        "level": "ERROR",
+        "message": "Failed to connect to the database."
+      }
+    ]
+  }
+  
