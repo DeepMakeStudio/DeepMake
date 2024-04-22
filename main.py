@@ -8,6 +8,7 @@ import time
 import re
 from PIL import Image
 from io import BytesIO
+from auth_handler import auth_handler
 
 import os
 import base64
@@ -29,10 +30,10 @@ import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
 from update_gui import Updater
-from routers import ui
+from routers import ui, plugin_manager
 
 import asyncio
 from huey.exceptions import TaskException
@@ -65,6 +66,7 @@ elif sys.platform == "darwin":
     storage_folder = os.path.join(os.getenv('HOME'),"Library","Application Support","DeepMake")
 elif sys.platform == "linux":
     storage_folder = os.path.join(os.getenv('HOME'),".local", "DeepMake")
+# exit()
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
@@ -75,13 +77,14 @@ huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 
 app = FastAPI()
 app.include_router(ui.router)
+app.include_router(plugin_manager.router)
 client = requests.Session()
 
 port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
 plugin_memory = {}
-
+auth = auth_handler()
 PLUGINS_DIRECTORY = "plugin"
 
 class Task(BaseModel):
@@ -222,18 +225,34 @@ def get_plugin_list():
 
 @app.get("/plugins/get_info/{plugin_name}")
 def get_plugin_info(plugin_name: str):
+    try:
+        # r = client.get(f"https://deepmake.com/plugins.json")
+        print(auth.logged_in)
+        r = auth.get_url("https://deepmake.com/plugins.json")
+    except:
+        raise HTTPException(status_code=404, detail="Must be logged to use plugins")
+    
     if plugin_name in plugin_list: 
         if plugin_name not in plugin_info.keys():
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
             # print(plugin_info[plugin_name]["plugin"]["memory"])
-            store_data(f"{plugin_name}_memory", {"memory": [plugin_info[plugin_name]["plugin"]["memory"]]})
-            store_data(f"{plugin_name}_model_memory", {"memory": plugin_info[plugin_name]["plugin"]["model_memory"]})
-            store_data(f"{plugin_name}_memory_mean", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
-            store_data(f"{plugin_name}_memory_max", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
-            store_data(f"{plugin_name}_memory_min", {"memory": plugin_info[plugin_name]["plugin"]["memory"]})
+            initial_value = int(r[plugin_name]["vram"].split(" ")[0])
+            mult = 1
+            if "GB" in r[plugin_name]["vram"]:
+                mult = 1024
+            initial_value *= mult
+            store_data(f"{plugin_name}_memory", {"memory": [initial_value]})
+            # store_data(f"{plugin_name}_model_memory", {"memory": plugin_info[plugin_name]["plugin"]["model_memory"]})
+            store_data(f"{plugin_name}_memory_mean", {"memory": initial_value})
+            store_data(f"{plugin_name}_memory_max", {"memory": initial_value})
+            store_data(f"{plugin_name}_memory_min", {"memory": initial_value})
 
+            try:
+                plugin_info[plugin_name]["plugin"]["license"] = r[plugin_name]["license"]
+            except:
+                plugin_info[plugin_name]["plugin"]["license"] = "Not Found"
         return plugin_info[plugin_name]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
@@ -252,13 +271,13 @@ def set_plugin_config(plugin_name: str, config: dict):
     if plugin_name in plugin_list:
         memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
         available_memory = memory_func() 
-        current_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
-        initial_memory = available_memory + current_model_memory
+        # current_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
+        # initial_memory = available_memory + current_model_memory
         port = port_mapping[plugin_name]
         r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
-        after_memory = memory_func()
-        new_model_memory = initial_memory - after_memory
-        store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
+        # after_memory = memory_func()
+        # new_model_memory = initial_memory - after_memory
+        # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
         return r.json()
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
@@ -449,7 +468,7 @@ def plugin_callback(plugin_name: str, status: str):
         memory_left = memory_func()    
         model_memory = initial_memory - memory_left
         
-        store_data(f"{plugin_name}_model_memory", {"memory": int(model_memory)})
+        # store_data(f"{plugin_name}_model_memory", {"memory": int(model_memory)})
         # model_memory = store_data(f"{plugin_name}_model_memory")["memory"]
 
         return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
@@ -520,11 +539,13 @@ def record_memory(task, task_value, exc):
                 return task_value
         initial_memory = task_data["memory"]
         plugin_name = task_data["plugin"]
-        plugin_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
+        # plugin_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
 
         memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
         memory_left = memory_func()
-        inference_memory = int(initial_memory - memory_left + plugin_model_memory)
+        # inference_memory = int(initial_memory - memory_left + plugin_model_memory)
+        inference_memory = int(initial_memory - memory_left)
+
         mem_list = retrieve_data(f"{plugin_name}_memory")["memory"]
         mem_list.append(inference_memory)
         store_data(f"{plugin_name}_memory", {"memory": mem_list})
