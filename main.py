@@ -37,6 +37,9 @@ from routers import ui, plugin_manager
 
 import asyncio
 from huey.exceptions import TaskException
+
+from auth_handler import auth_handler
+
 CONDA = "MiniConda3"
 
 def get_id(): # return md5 hash of uuid.getnode()
@@ -111,6 +114,8 @@ jobs = {}
 most_recent_use = []
 
 plugin_info = {}
+
+auth = auth_handler()
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
@@ -653,15 +658,47 @@ def delete_data(key: str):
 #     except:
 #         pass
 
-@app.get("/ui/update")
-def update():
+# @app.get("/ui/update")
+# def update():
     
-    app = QApplication(sys.argv)
-    window = Updater()
-    apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
-    window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
-    window.show()
-    try:
-        sys.exit(app.exec())
-    except:
-        pass
+#     app = QApplication(sys.argv)
+#     window = Updater()
+#     apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
+#     window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
+#     window.show()
+#     try:
+#         sys.exit(app.exec())
+#     except:
+#         pass
+
+@app.get("/login/status")
+async def get_login_status():
+    return {"logged_in": auth.logged_in}
+
+@app.post("/login/login")
+async def login(username: str, password: str):
+    if auth.login_with_credentials(username, password):
+        return {"status": "success", "message": "Logged in successfully"}
+    else:
+        return {"status": "failed", "message": "Login failed"}
+
+@app.post("/login/logout")
+async def logout():
+    auth.logout()
+    return {"status": "success", "message": "Logged out successfully"}
+
+@app.get("/login/username")
+async def get_username():
+    return {"username": auth.username}
+
+@app.get("/login/get_url")
+async def get_file(url: str):
+    return auth.get_url(url)
+
+@app.get("/login/check_login")
+async def check_login():
+    if auth.logged_in:
+        user = auth.get_user_info()
+        return {'logged_in': True, 'email': user['email'], 'roles': user['app_metadata']['roles']}
+    else:
+        return {'logged_in': False}
