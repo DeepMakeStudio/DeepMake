@@ -8,6 +8,7 @@ import time
 import re
 from PIL import Image
 from io import BytesIO
+from auth_handler import auth_handler
 
 import os
 import base64
@@ -41,19 +42,19 @@ CONDA = "MiniConda3"
 def get_id(): # return md5 hash of uuid.getnode()
     return md5(str(uuid.getnode()).encode()).hexdigest()
 
-sentry_sdk.init(
-    dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
-    traces_sample_rate=0.1,
-    profiles_sample_rate=0.1,
-    enable_tracing=True,
-    integrations=[
-        HueyIntegration(),
-    ],
-)
-sentry_sdk.set_user({"id": get_id()})
-sentry_sdk.set_tag("platform", sys.platform)
+# sentry_sdk.init(
+#     dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
+#     traces_sample_rate=0.1,
+#     profiles_sample_rate=0.1,
+#     enable_tracing=True,
+#     integrations=[
+#         HueyIntegration(),
+#     ],
+# )
+# sentry_sdk.set_user({"id": get_id()})
+# sentry_sdk.set_tag("platform", sys.platform)
 
-sentry_sdk.capture_message('Backend started')
+# sentry_sdk.capture_message('Backend started')
 
 global port_mapping
 global plugin_endpoints
@@ -82,7 +83,7 @@ port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
 plugin_memory = {}
-
+auth = auth_handler()
 PLUGINS_DIRECTORY = "plugin"
 
 class Task(BaseModel):
@@ -224,7 +225,9 @@ def get_plugin_list():
 @app.get("/plugins/get_info/{plugin_name}")
 def get_plugin_info(plugin_name: str):
     try:
-        r = client.get(f"https://deepmake.com/plugins.json")
+        # r = client.get(f"https://deepmake.com/plugins.json")
+        print(auth.logged_in)
+        r = auth.get_url("https://deepmake.com/plugins.json")
     except:
         raise HTTPException(status_code=404, detail="Must be logged to use plugins")
     
@@ -234,9 +237,9 @@ def get_plugin_info(plugin_name: str):
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
             # print(plugin_info[plugin_name]["plugin"]["memory"])
-            initial_value = int(r.json()[plugin_name]["vram"].split(" ")[0])
+            initial_value = int(r[plugin_name]["vram"].split(" ")[0])
             mult = 1
-            if "GB" in r.json()[plugin_name]:
+            if "GB" in r[plugin_name]["vram"]:
                 mult = 1024
             initial_value *= mult
             store_data(f"{plugin_name}_memory", {"memory": [initial_value]})
@@ -246,10 +249,9 @@ def get_plugin_info(plugin_name: str):
             store_data(f"{plugin_name}_memory_min", {"memory": initial_value})
 
             try:
-                plugin_info[plugin_name]["plugin"]["license"] = r.json()[plugin_name]["license"]
+                plugin_info[plugin_name]["plugin"]["license"] = r[plugin_name]["license"]
             except:
                 plugin_info[plugin_name]["plugin"]["license"] = "Not Found"
-                
         return plugin_info[plugin_name]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
