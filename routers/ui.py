@@ -9,35 +9,36 @@ import subprocess
 from gui import ConfigGUI, PluginManagerGUI, Updater
 
 router = APIRouter()
-app = None
 
 @router.get("/ui/plugin_manager", tags=["ui"])
 def plugin_manager():
-    global app
-    if app is None:
+    if sys.platform != "darwin":
         app = QApplication(sys.argv)
-    window = PluginManagerGUI()
-    window.show()
-    center_screen(window)
+        window = PluginManagerGUI()
+        window.show()
+        center_screen(window)
 
-    try:
-        sys.exit(app.exec())
-    except:
-        pass
+        try:
+            sys.exit(app.exec())
+        except:
+            pass
+    else:
+        subprocess.Popen("python mac_show_ui.py -n PluginManager".split())
 
 @router.get("/ui/configure/{plugin_name}", tags=["ui"])
 def plugin_config_ui(plugin_name: str):
-    global app
-    if app is None:
+    if sys.platform != "darwin":
         app = QApplication(sys.argv)
-    window = ConfigGUI(plugin_name)
-    window.show()
-    center_screen(window)
+        window = ConfigGUI(plugin_name)
+        window.show()
+        center_screen(window)
 
-    try:
-        sys.exit(app.exec())
-    except:
-        pass
+        try:
+            sys.exit(app.exec())
+        except:
+            pass
+    else:
+        subprocess.Popen(f"python mac_show_ui.py -n Config -p {plugin_name}".split())
 
 @router.get("/ui/plugin_manager/install/{plugin_name}", tags=["ui"])
 async def install_plugin(plugin_name: str, plugin_dict: dict):
@@ -85,16 +86,18 @@ def update_plugin(plugin_name: str, version: str):
 
 @router.get("/ui/updater", tags=["ui"])
 def update_gui():
-    global app
-    if app is None:
+    if sys.platform != "darwin":
         app = QApplication(sys.argv)
-    window = Updater()
-    window.show()
-    center_screen(window)
-    try:
-        sys.exit(app.exec())
-    except:
-        pass
+        window = Updater()
+        window.show()
+        center_screen(window)
+
+        try:
+            sys.exit(app.exec())
+        except:
+            pass
+    else:
+        subprocess.Popen("python mac_show_ui.py -n Updater".split())
 
 
 def center_screen(screen):
