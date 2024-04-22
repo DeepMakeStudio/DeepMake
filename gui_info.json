@@ -1,0 +1,25 @@
+{
+    "plugin":{
+        "Diffusers":{
+            "url":"https://github.com/DeepMakeStudio/Diffusers",
+            "repo":"GitHub - DeepMakeStudio/Diffusers: Generate images using Diffusers",
+            "Version": "0.1.0",
+            "Description":"A diffusers based plugin implementing Stable Diffusion image generation.",
+            "size": "1 GB"
+        },
+        "Bisenet": {
+            "url": "https://github.com/DeepMakeStudio/Bisenet",
+            "repo": "GitHub - DeepMakeStudio/Bisenet: Bisenet implementation for DeepMakeStudio",
+            "Version": "0.1.0",
+            "Description": "A Bisenet based plugin implementing image segmentation.",
+            "size": "500 MB"
+        },
+        "Dummy": {
+            "url": "https://github.com/DeepMakeStudio/Dummy",
+            "repo": "Testing",
+            "Version": "0.1.0",
+            "Description": "Dummy",
+            "size": "500 MB"
+        }
+    }
+}
