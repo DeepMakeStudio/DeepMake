@@ -2,19 +2,28 @@ import os
 import sys
 import subprocess 
 from fastapi import APIRouter
+import requests
+import io
+import zipfile
 
 router = APIRouter()
 
 @router.get("/plugin_manager/install/{plugin_name}", tags=["plugin_manager"])
 async def install_plugin(plugin_name: str, plugin_dict: dict):
-    url = plugin_dict["plugin"][plugin_name]["url"] + ".git"
+    url = plugin_dict["plugin"][plugin_name]["url"]
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
     plugin_folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin")
-    if sys.platform != "win32":
-        p = subprocess.Popen(f"git clone {url} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if ".git" in url:
+        if sys.platform != "win32":
+            p = subprocess.Popen(f"git clone {url} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
         # p = subprocess.Popen(f"unzip {plugin_name}.zip -d {plugin_folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
-        p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        r = requests.get(url)
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        z.extractall(folder_path)
         # p = subprocess.Popen(f"tar -xf {plugin_name}.zip -C {plugin_folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     print(out, err)
