@@ -42,19 +42,19 @@ CONDA = "MiniConda3"
 def get_id(): # return md5 hash of uuid.getnode()
     return md5(str(uuid.getnode()).encode()).hexdigest()
 
-# sentry_sdk.init(
-#     dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
-#     traces_sample_rate=0.1,
-#     profiles_sample_rate=0.1,
-#     enable_tracing=True,
-#     integrations=[
-#         HueyIntegration(),
-#     ],
-# )
-# sentry_sdk.set_user({"id": get_id()})
-# sentry_sdk.set_tag("platform", sys.platform)
+sentry_sdk.init(
+    dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
+    traces_sample_rate=0.1,
+    profiles_sample_rate=0.1,
+    enable_tracing=True,
+    integrations=[
+        HueyIntegration(),
+    ],
+)
+sentry_sdk.set_user({"id": get_id()})
+sentry_sdk.set_tag("platform", sys.platform)
 
-# sentry_sdk.capture_message('Backend started')
+sentry_sdk.capture_message('Backend started')
 
 global port_mapping
 global plugin_endpoints
