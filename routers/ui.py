@@ -4,6 +4,7 @@ from PySide6.QtGui import QScreen
 import sys
 import os
 import subprocess
+import requests
 # from test import ConfigGUI
 
 from gui import ConfigGUI, PluginManagerGUI, Updater
@@ -27,6 +28,13 @@ def plugin_manager():
 
 @router.get("/ui/configure/{plugin_name}", tags=["ui"])
 def plugin_config_ui(plugin_name: str):
+    try:
+        r = requests.get(f"http://127.0.0.1:8000/plugins/get_config/{plugin_name}")
+        print(r.status_code)
+        print(r.json())
+    except:
+        return {"status": "error", "message": "Please start the plugin first."}
+    
     if sys.platform != "darwin":
         app = QApplication(sys.argv)
         window = ConfigGUI(plugin_name)
