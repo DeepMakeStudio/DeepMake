@@ -22,9 +22,6 @@ class setWorker(QObject):
         self.finished.emit()   
 
 
-
-
-
 class ConfigGUI(QWidget):
     def __init__(self, plugin_name):
         super().__init__() 
@@ -242,6 +239,7 @@ class Worker(QObject):
         p.wait()
 
         self.finished.emit()
+        
 class PluginManagerGUI(QWidget):
     def __init__(self):
         super().__init__() 
@@ -348,7 +346,7 @@ class PluginManagerGUI(QWidget):
         installing_item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
         clone_link = self.plugin_dict["plugin"][plugin_name]["url"] + ".git"
         folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
-        r = client.get(f"http://127.0.0.1:8000/ui/plugin_manager/install/{plugin_name}", json = self.plugin_dict)
+        r = client.get(f"http://127.0.0.1:8000/plugin_manager/install/{plugin_name}", json = self.plugin_dict)
 
         self.thread_process(f"conda env create -f {folder_path}/environment.yml", row_number)
 
@@ -360,7 +358,7 @@ class PluginManagerGUI(QWidget):
         dlg = CustomDialog(plugin_name)
         if dlg.exec():
             print("Uninstalling", plugin_name)
-            r = client.get(f"http://127.0.0.1:8000/ui/plugin_manager/uninstall/{plugin_name}")
+            r = client.get(f"http://127.0.0.1:8000/plugin_manager/uninstall/{plugin_name}")
             self.button_dict.pop(plugin_name)
             self.tableWidget.removeCellWidget(list(self.plugin_dict['plugin'].keys()).index(plugin_name), 2)
             self.install_button_creation(plugin_name)
@@ -444,7 +442,7 @@ class CustomDialog(QDialog):
         version = self.update_button.text().split()[-1]
         if version == "Latest":
             version = self.tag_list[0]
-        r = client.get(f"http://127.0.0.1:8000/ui/plugin_manager/update/{plugin_name}/{version}")
+        r = client.get(f"http://127.0.0.1:8000/plugin_manager/update/{plugin_name}/{version}")
         # current_tag = self.getVersion()
         self.tableWidget.setItem(0, 0, QTableWidgetItem(f"Current Version: {version}"))
         print("Updated", plugin_name, "to version", version)
@@ -544,7 +542,7 @@ class Updater(QWidget):
             version = self.tag_list[0]
         print("Updating to version", version)
 
-        r = client.get(f"http://127.0.0.1:8000/ui/plugin_manager/update/DeepMake/{version}")
+        r = client.get(f"http://127.0.0.1:8000/plugin_manager/update/DeepMake/{version}")
         # print(p.communicate())
         # current_tag = self.getVersion()
         self.tableWidget.setItem(0, 0, QTableWidgetItem(f"Current Version: {version}"))
