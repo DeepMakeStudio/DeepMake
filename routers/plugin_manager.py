@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.get("/plugin_manager/install/{plugin_name}", tags=["plugin_manager"])
 async def install_plugin(plugin_name: str, plugin_dict: dict):
-    url = plugin_dict["plugin"][plugin_name]["url"]
+    url = plugin_dict[plugin_name]["url"]
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
     plugin_folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin")
     if ".git" in url:
@@ -18,7 +18,6 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
             p = subprocess.Popen(f"git clone {url} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
             p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
         # p = subprocess.Popen(f"unzip {plugin_name}.zip -d {plugin_folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         r = requests.get(url)

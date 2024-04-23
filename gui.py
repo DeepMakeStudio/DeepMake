@@ -7,9 +7,10 @@ import requests
 import subprocess
 import json 
 import webbrowser
+from auth_handler import auth_handler
 
 client = requests.Session()
-
+auth = auth_handler()
 class setWorker(QObject):
     name = ""
     output_config = {}
@@ -137,7 +138,8 @@ class ConfigGUI(QWidget):
                 # text_box.textChanged.connect(lambda key = key, text=text_box.text(): self.editConfig(key, text))
                 text_box.textChanged.connect(lambda text, key = key: self.editConfig(key, text))
                 # self.widget_dict[key] = text_box
-                self.layout.addWidget(text_box) 
+                self.layout.addWidget(text_box)
+                
 
 
     def openFileNameDialog(self, image_label):
@@ -239,7 +241,7 @@ class Worker(QObject):
         p.wait()
 
         self.finished.emit()
-        
+
 class PluginManagerGUI(QWidget):
     def __init__(self):
         super().__init__() 
@@ -247,7 +249,7 @@ class PluginManagerGUI(QWidget):
         self.title = "Plugin Manager"
         self.left = 0
         self.top = 0
-        self.width = 1000
+        self.width = 1300
         self.height = 300
         self.setWindowTitle(self.title) 
         self.setGeometry(100, 100, self.width, self.height) 
@@ -255,8 +257,8 @@ class PluginManagerGUI(QWidget):
         r = client.get(f"http://127.0.0.1:8000/plugins/get_list")
    
         
-        with open(os.path.join(os.path.dirname(__file__), "gui_info.json")) as f:
-            self.plugin_dict = json.load(f)
+        self.plugin_dict = auth.get_url("https://deepmake.com/plugins.json")
+
         self.createTable() 
 
         self.scrollArea = QScrollArea()
@@ -275,7 +277,7 @@ class PluginManagerGUI(QWidget):
 
     def createTable(self): 
         self.tableWidget = QTableWidget() 
-        row_count = len(self.plugin_dict["plugin"])
+        row_count = len(self.plugin_dict.keys())
         column_count = 5
 
         self.tableWidget.setRowCount(row_count)  
@@ -283,14 +285,17 @@ class PluginManagerGUI(QWidget):
         self.button_dict = {}  
 
         for row in range(row_count):
-            plugin_name = list(self.plugin_dict["plugin"].keys())[row]
+            plugin_name = list(self.plugin_dict.keys())[row]
             for col in range(column_count):
                 if col == 0:
                     self.tableWidget.setItem(row, col, QTableWidgetItem(plugin_name))
                 elif col == 1:
-                    self.tableWidget.setItem(row, col, QTableWidgetItem(self.plugin_dict["plugin"][plugin_name]["Description"]))
+                    self.tableWidget.setItem(row, col, QTableWidgetItem(self.plugin_dict[plugin_name]["Description"]))
                 elif col == 2:
-                    item = QTableWidgetItem(self.plugin_dict["plugin"][plugin_name]["Version"])
+                    if "Version" not in self.plugin_dict[plugin_name].keys():
+                        item = QTableWidgetItem("0.0.0")
+                    else:
+                        item = QTableWidgetItem(self.plugin_dict[plugin_name]["Version"])
                     self.tableWidget.setItem(row, col, item)
                     item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
                 elif col == 3:
@@ -300,7 +305,7 @@ class PluginManagerGUI(QWidget):
                         self.install_button_creation(plugin_name)
                 elif col == 4:
                     if plugin_name in os.listdir(fastapi_launcher_path):
-                        if "url" in self.plugin_dict["plugin"][plugin_name].keys():
+                        if "url" in self.plugin_dict[plugin_name].keys():
 
                             button = QPushButton(f"Manage")
                             button.clicked.connect(lambda _, name = plugin_name: self.uninstall_plugin(name))
@@ -321,8 +326,8 @@ class PluginManagerGUI(QWidget):
         self.tableWidget.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
 
     def install_button_creation(self, plugin_name):
-        row = list(self.plugin_dict['plugin'].keys()).index(plugin_name)
-        if "url" not in self.plugin_dict["plugin"][plugin_name].keys():
+        row = list(self.plugin_dict.keys()).index(plugin_name)
+        if "url" not in self.plugin_dict[plugin_name].keys():
             button = QPushButton(f"Subscribe")
             button.clicked.connect(lambda: webbrowser.open("https://deepmake.com"))
         else:
@@ -337,14 +342,13 @@ class PluginManagerGUI(QWidget):
             print("Plugin already installed")
             return
     
-        row_number = list(self.plugin_dict['plugin'].keys()).index(plugin_name)
+        row_number = list(self.plugin_dict.keys()).index(plugin_name)
         # installing_button = QPushButton(f"Installing")
         self.tableWidget.removeCellWidget(row_number, 3)
 
         installing_item = QTableWidgetItem("Installing...")
         self.tableWidget.setItem(row_number, 3, installing_item)
         installing_item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
-        clone_link = self.plugin_dict["plugin"][plugin_name]["url"] + ".git"
         folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
         r = client.get(f"http://127.0.0.1:8000/plugin_manager/install/{plugin_name}", json = self.plugin_dict)
 
@@ -360,12 +364,12 @@ class PluginManagerGUI(QWidget):
             print("Uninstalling", plugin_name)
             r = client.get(f"http://127.0.0.1:8000/plugin_manager/uninstall/{plugin_name}")
             self.button_dict.pop(plugin_name)
-            self.tableWidget.removeCellWidget(list(self.plugin_dict['plugin'].keys()).index(plugin_name), 2)
+            self.tableWidget.removeCellWidget(list(self.plugin_dict.keys()).index(plugin_name), 2)
             self.install_button_creation(plugin_name)
             self.manage(plugin_name)
     
     def manage(self, plugin_name):
-        row = list(self.plugin_dict['plugin'].keys()).index(plugin_name)
+        row = list(self.plugin_dict.keys()).index(plugin_name)
         item = QTableWidgetItem("Install First!")
         item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.tableWidget.removeCellWidget(row, 4)
@@ -373,7 +377,7 @@ class PluginManagerGUI(QWidget):
 
     
     def uninstall_button_creation(self, plugin_name):
-        row = list(self.plugin_dict['plugin'].keys()).index(plugin_name)
+        row = list(self.plugin_dict.keys()).index(plugin_name)
         button = QPushButton(f"Manage")
         button.clicked.connect(lambda _, name = plugin_name: self.uninstall_plugin(name))
         self.button_dict[plugin_name] = button
@@ -395,12 +399,12 @@ class PluginManagerGUI(QWidget):
         self.thread.finished.connect(self.thread.deleteLater)
 
         self.thread.start()
-        plugin_name = list(self.plugin_dict["plugin"].keys())[row_number]
+        plugin_name = list(self.plugin_dict.keys())[row_number]
         self.thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
         self.thread.finished.connect(lambda: self.Installed(plugin_name))
     
     def Installed(self, plugin_name):
-        row = list(self.plugin_dict['plugin'].keys()).index(plugin_name)
+        row = list(self.plugin_dict.keys()).index(plugin_name)
         install_label = QTableWidgetItem("Installed")
         install_label.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.tableWidget.setItem(row, 3, install_label)
