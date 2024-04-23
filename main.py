@@ -477,6 +477,18 @@ def plugin_callback(plugin_name: str, status: str):
         plugin_states.pop(plugin_name)
         return {"status": "error", "message": f"{plugin_name} failed to start because {status}"}
 
+@app.post("/plugin_install_callback/{plugin_name}/{progress}/{stage}")
+async def plugin_install_callback(plugin_name: str, progress: float, stage: str):
+    # Handle installation progress update here
+    print(f"Installation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
+    return {"status": "success", "message": f"Received installation progress for {plugin_name}"}
+
+@app.post("/plugin_uninstall_callback/{plugin_name}/{progress}/{stage}")
+async def plugin_uninstall_callback(plugin_name: str, progress: float, stage: str):
+    # Handle uninstallation progress update here
+    print(f"Unistallation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
+    return {"status": "success", "message": f"Received uninstallation progress for {plugin_name}"}
+
 @app.get("/plugins/get_jobs")
 def get_running_jobs():
     for job in running_jobs:
