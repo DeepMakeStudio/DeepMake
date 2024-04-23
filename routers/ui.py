@@ -10,24 +10,29 @@ import requests
 from gui import ConfigGUI, PluginManagerGUI, Updater, ReportIssueDialog, LoginWidget
 
 router = APIRouter()
+app = None
 
 @router.get("/ui/plugin_manager", tags=["ui"])
 def plugin_manager():
-    if sys.platform != "darwin":
-        app = QApplication(sys.argv)
-        window = PluginManagerGUI()
-        window.show()
-        center_screen(window)
+    # global app
+    # if sys.platform != "darwin":
+    #     if app is None:
+    #         app = QApplication(sys.argv)
+    #     window = PluginManagerGUI()
+    #     window.show()
+    #     center_screen(window)
 
-        try:
-            sys.exit(app.exec())
-        except:
-            pass
-    else:
-        subprocess.Popen("python mac_show_ui.py -n PluginManager".split())
+    #     try:
+    #         sys.exit(app.exec())
+    #     except:
+    #         pass
+    # else:
+    subprocess.Popen("python mac_show_ui.py -n PluginManager".split())
 
 @router.get("/ui/configure/{plugin_name}", tags=["ui"])
 def plugin_config_ui(plugin_name: str):
+    global app
+
     try:
         r = requests.get(f"http://127.0.0.1:8000/plugins/get_config/{plugin_name}")
         print(r.status_code)
@@ -35,33 +40,37 @@ def plugin_config_ui(plugin_name: str):
     except:
         return {"status": "error", "message": "Please start the plugin first."}
     
-    if sys.platform != "darwin":
-        app = QApplication(sys.argv)
-        window = ConfigGUI(plugin_name)
-        window.show()
-        center_screen(window)
+    # if sys.platform != "darwin":
+    #     if app is None:
+    #         app = QApplication(sys.argv)
+    #     window = ConfigGUI(plugin_name)
+    #     window.show()
+    #     center_screen(window)
 
-        try:
-            sys.exit(app.exec())
-        except:
-            pass
-    else:
-        subprocess.Popen(f"python mac_show_ui.py -n Config -p {plugin_name}".split())
+    #     try:
+    #         sys.exit(app.exec())
+    #     except:
+    #         pass
+    # else:
+    subprocess.Popen(f"python mac_show_ui.py -n Config -p {plugin_name}".split())
 
 @router.get("/ui/updater", tags=["ui"])
 def update_gui():
-    if sys.platform != "darwin":
-        app = QApplication(sys.argv)
-        window = Updater()
-        window.show()
-        center_screen(window)
+    # global app
 
-        try:
-            sys.exit(app.exec())
-        except:
-            pass
-    else:
-        subprocess.Popen("python mac_show_ui.py -n Updater".split())
+    # if sys.platform != "darwin":
+    #     if app is None:
+    #         app = QApplication(sys.argv)
+    #     window = Updater()
+    #     window.show()
+    #     center_screen(window)
+
+    #     try:
+    #         sys.exit(app.exec())
+    #     except:
+    #         pass
+    # else:
+    subprocess.Popen("python mac_show_ui.py -n Updater".split())
 
 
 def center_screen(screen):
@@ -73,32 +82,38 @@ def center_screen(screen):
 
 @router.get("/ui/report_issue", tags=["ui"])
 def report_issue():
-    if sys.platform != "darwin":
-        #log_file_path = '/home/andresca94/DeepMake/test_log_file.json'
-        app = QApplication([])
-        #window = ReportIssueDialog(logFilePath=log_file_path)
-        window = ReportIssueDialog()
-        window.show()
-        app.exec()
+    # global app
 
-        try:
-            sys.exit(app.exec())
-        except:
-            pass
-    else:
-        subprocess.Popen("python mac_show_ui.py -n ReportIssueDialog".split())
+    # if sys.platform != "darwin":
+    #     #log_file_path = '/home/andresca94/DeepMake/test_log_file.json'
+    #     if app is None:
+    #         app = QApplication(sys.argv)
+    #     #window = ReportIssueDialog(logFilePath=log_file_path)
+    #     window = ReportIssueDialog()
+    #     window.show()
+    #     app.exec()
+
+    #     try:
+    #         sys.exit(app.exec())
+    #     except:
+    #         pass
+    # else:
+    subprocess.Popen("python mac_show_ui.py -n ReportIssueDialog".split())
 
 @router.get("/ui/login", tags=["ui"])
-def report_issue():
-    if sys.platform != "darwin":
-        app = QApplication([])
-        window = LoginWidget()
-        window.show()
-        app.exec()
+def login():
+    # global app
 
-        try:
-            sys.exit(app.exec())
-        except:
-            pass
-    else:
-        subprocess.Popen("python mac_show_ui.py -n ReportIssueDialog".split())
+    # if sys.platform != "darwin":
+    #     if app is None:
+    #         app = QApplication(sys.argv)
+    #     window = LoginWidget()
+    #     window.show()
+    #     app.exec()
+
+    #     try:
+    #         sys.exit(app.exec())
+    #     except:
+    #         pass
+    # else:
+    subprocess.Popen("python mac_show_ui.py -n Login".split())

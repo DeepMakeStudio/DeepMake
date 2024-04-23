@@ -9,6 +9,7 @@ import subprocess
 import json 
 import webbrowser
 from auth_handler import auth_handler
+import time
 
 client = requests.Session()
 auth = auth_handler()
@@ -231,6 +232,7 @@ class ConfigGUI(QWidget):
 
 class Worker(QObject):
     popen_string = " "
+    plugin_name = ""
     finished = Signal()
     # progress = Signal(int)
     def run(self):
@@ -240,6 +242,16 @@ class Worker(QObject):
         else:   
             p = subprocess.Popen(self.popen_string, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         p.wait()
+        r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{self.plugin_name}")
+        state = "STARTING"
+        while state != "RUNNING":
+            r = client.get(f"http://127.0.0.1:8000/plugins/get_states/")
+            plugin_states = r.json()
+            state = plugin_states[self.plugin_name]["state"]
+            time.sleep(3)
+        
+        r = client.get(f"http://127.0.0.1:8000/plugins/on_install/{self.plugin_name}")
+        r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{self.plugin_name}")
 
         self.finished.emit()
 
@@ -289,14 +301,19 @@ class PluginManagerGUI(QWidget):
             plugin_name = list(self.plugin_dict.keys())[row]
             for col in range(column_count):
                 if col == 0:
-                    self.tableWidget.setItem(row, col, QTableWidgetItem(plugin_name))
+                    plugin_name_item = QTableWidgetItem(plugin_name)
+                    plugin_name_item.setFlags(Qt.ItemIsEnabled)
+                    self.tableWidget.setItem(row, col, plugin_name_item)
                 elif col == 1:
-                    self.tableWidget.setItem(row, col, QTableWidgetItem(self.plugin_dict[plugin_name]["Description"]))
+                    description_item = QTableWidgetItem(self.plugin_dict[plugin_name]["Description"])
+                    description_item.setFlags(Qt.ItemIsEnabled)
+                    self.tableWidget.setItem(row, col, description_item)
                 elif col == 2:
                     if "Version" not in self.plugin_dict[plugin_name].keys():
                         item = QTableWidgetItem("0.0.0")
                     else:
                         item = QTableWidgetItem(self.plugin_dict[plugin_name]["Version"])
+                    item.setFlags(Qt.ItemIsEnabled)
                     self.tableWidget.setItem(row, col, item)
                     item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
                 elif col == 3:
@@ -348,10 +365,11 @@ class PluginManagerGUI(QWidget):
         self.tableWidget.removeCellWidget(row_number, 3)
 
         installing_item = QTableWidgetItem("Installing...")
+        installing_item.setFlags(Qt.ItemIsEnabled)
         self.tableWidget.setItem(row_number, 3, installing_item)
         installing_item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
         folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
-        r = client.get(f"http://127.0.0.1:8000/plugin_manager/install/{plugin_name}", json = self.plugin_dict)
+        r = client.post(f"http://127.0.0.1:8000/plugin_manager/install/{plugin_name}", json = self.plugin_dict)
 
         self.thread_process(f"conda env create -f {folder_path}/environment.yml", row_number)
 
@@ -372,6 +390,7 @@ class PluginManagerGUI(QWidget):
     def manage(self, plugin_name):
         row = list(self.plugin_dict.keys()).index(plugin_name)
         item = QTableWidgetItem("Install First!")
+        item.setFlags(Qt.ItemIsEnabled)
         item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.tableWidget.removeCellWidget(row, 4)
         self.tableWidget.setItem(row, 4, item)
@@ -389,9 +408,11 @@ class PluginManagerGUI(QWidget):
     def thread_process(self, popen_string, row_number):
 
         self.thread = QThread()
+        plugin_name = list(self.plugin_dict.keys())[row_number]
 
         self.worker = Worker()
         self.worker.popen_string = popen_string
+        self.worker.plugin_name = plugin_name
 
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
@@ -400,13 +421,13 @@ class PluginManagerGUI(QWidget):
         self.thread.finished.connect(self.thread.deleteLater)
 
         self.thread.start()
-        plugin_name = list(self.plugin_dict.keys())[row_number]
         self.thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
         self.thread.finished.connect(lambda: self.Installed(plugin_name))
     
     def Installed(self, plugin_name):
         row = list(self.plugin_dict.keys()).index(plugin_name)
         install_label = QTableWidgetItem("Installed")
+        install_label.setFlags(Qt.ItemIsEnabled)
         install_label.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.tableWidget.setItem(row, 3, install_label)
 
@@ -449,7 +470,9 @@ class CustomDialog(QDialog):
             version = self.tag_list[0]
         r = client.get(f"http://127.0.0.1:8000/plugin_manager/update/{plugin_name}/{version}")
         # current_tag = self.getVersion()
-        self.tableWidget.setItem(0, 0, QTableWidgetItem(f"Current Version: {version}"))
+        version_item = QTableWidgetItem(f"Current Version: {version}")
+        version_item.setFlags(Qt.ItemIsEnabled)
+        self.tableWidget.setItem(0, 0, version_item)
         print("Updated", plugin_name, "to version", version)
 
     def version_management(self):
@@ -471,8 +494,12 @@ class CustomDialog(QDialog):
         self.tableWidget.setColumnCount(column_count) 
         self.button_dict = {}  
         current_tag = self.getVersion()
-        self.tableWidget.setItem(0, 0, QTableWidgetItem(f"Current Version: {current_tag}"))
-        self.tableWidget.setItem(0, 1, QTableWidgetItem("Available Versions"))
+        cur_ver_item = QTableWidgetItem(f"Current Version: {current_tag}")
+        avail_item = QTableWidgetItem("Available Versions")
+        cur_ver_item.setFlags(Qt.ItemIsEnabled)
+        avail_item.setFlags(Qt.ItemIsEnabled)
+        self.tableWidget.setItem(0, 0, cur_ver_item)
+        self.tableWidget.setItem(0, 1, avail_item)
         dropdown = QComboBox()
         self.tag_list = self.version_management()
         self.tag_list.reverse()
@@ -549,8 +576,10 @@ class Updater(QWidget):
 
         r = client.get(f"http://127.0.0.1:8000/plugin_manager/update/DeepMake/{version}")
         # print(p.communicate())
-        # current_tag = self.getVersion()
-        self.tableWidget.setItem(0, 0, QTableWidgetItem(f"Current Version: {version}"))
+        current_tag = self.getVersion()
+        cur_ver_item = QTableWidgetItem(f"Current Version: {current_tag}")
+        cur_ver_item.setFlags(Qt.ItemIsEnabled)
+        self.tableWidget.setItem(0, 0, cur_ver_item)
         print("Updated to version", version)
 
     def version_management(self):
@@ -570,8 +599,14 @@ class Updater(QWidget):
         self.tableWidget.setColumnCount(column_count) 
         self.button_dict = {}  
         current_tag = self.getVersion()
-        self.tableWidget.setItem(0, 0, QTableWidgetItem(f"Current Version: {current_tag}"))
-        self.tableWidget.setItem(0, 1, QTableWidgetItem("Available Versions"))
+
+        cur_ver_item = QTableWidgetItem(f"Current Version: {current_tag}")
+        avail_item = QTableWidgetItem("Available Versions")
+        cur_ver_item.setFlags(Qt.ItemIsEnabled)
+        avail_item.setFlags(Qt.ItemIsEnabled)
+
+        self.tableWidget.setItem(0, 0, cur_ver_item)
+        self.tableWidget.setItem(0, 1,)
         dropdown = QComboBox()
         self.tag_list = self.version_management()
         self.tag_list.reverse()

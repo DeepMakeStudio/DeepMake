@@ -80,7 +80,7 @@ class auth_handler():
 
     def get_url(self, url):
         self.validate_jwt()
-        headers = {'Authorization': f'Bearer {self.jwt}', 'Cookie': f'nf_jwt={self.jwt}'}
+        headers = {'Authorization': f'Bearer {self.JWT}', 'Cookie': f'nf_jwt={self.JWT}'}
         response = requests.get(url, headers=headers)
         return response.json()
 

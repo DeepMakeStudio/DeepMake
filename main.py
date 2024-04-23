@@ -345,6 +345,18 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
 
     return {"started": True, "plugin_name": plugin_name, "port": port}
 
+@app.get("/plugins/on_install/{plugin_name}")
+def on_install(plugin_name: str):
+    job = huey_on_install(plugin_name, port_mapping)
+    return {"job_id": job.id}
+
+@huey.task()
+def huey_on_install(plugin_name: str, port_mapping):
+    port = port_mapping[plugin_name]
+    print(port)
+    r = client.post(f"http://127.0.0.1:{port}/plugins/install")
+    return r.json()
+
 @app.get("/plugins/stop_plugin/{plugin_name}")
 def stop_plugin(plugin_name: str):
     # need some test to ensure open port
@@ -544,7 +556,10 @@ def add_job(job: Job):
 @huey.post_execute()
 def record_memory(task, task_value, exc):
     if task_value is not None:
-        task_data = retrieve_data(f"{task.id}_available")
+        try:
+            task_data = retrieve_data(f"{task.id}_available")
+        except:
+            return
 
         plugin_states = task_data["plugin_states"]
         running_jobs = task_data["running_jobs"]

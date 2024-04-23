@@ -8,7 +8,7 @@ import zipfile
 
 router = APIRouter()
 
-@router.get("/plugin_manager/install/{plugin_name}", tags=["plugin_manager"])
+@router.post("/plugin_manager/install/{plugin_name}", tags=["plugin_manager"])
 async def install_plugin(plugin_name: str, plugin_dict: dict):
     url = plugin_dict[plugin_name]["url"]
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
@@ -39,7 +39,7 @@ async def uninstall_plugin(plugin_name: str):
     if sys.platform != "win32":
         p = subprocess.Popen(f"rm -rf {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
-        p = subprocess.Popen(f"rm -rf {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p = subprocess.Popen(f"rmdir /s /q {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return {"status": "success"}
 
 @router.get("/plugin_manager/update/{plugin_name}/{version}", tags=["plugin_manager"])
