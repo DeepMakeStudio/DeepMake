@@ -1,5 +1,6 @@
-from PySide6.QtWidgets import QWidget, QPushButton, QLineEdit, QComboBox, QSlider, QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox, QDialog, QScrollArea, QDialogButtonBox, QLabel, QFileDialog, QTableWidget, QHeaderView, QTableWidgetItem, QApplication, QProgressBar, QComboBox, QHBoxLayout, QListWidget, QHeaderView, QTableWidget, QVBoxLayout, QTableWidgetItem, QDialog, QScrollArea, QDialogButtonBox, QSlider, QSizePolicy, QCheckBox, QLabel, QLineEdit, QFileDialog
+from PySide6.QtWidgets import QWidget, QPushButton, QLineEdit, QTextEdit, QComboBox, QSlider, QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox, QDialog, QScrollArea, QDialogButtonBox, QLabel, QFileDialog, QTableWidget, QHeaderView, QTableWidgetItem, QApplication, QProgressBar, QComboBox, QHBoxLayout, QListWidget, QHeaderView, QTableWidget, QVBoxLayout, QTableWidgetItem, QDialog, QScrollArea, QDialogButtonBox, QSlider, QSizePolicy, QCheckBox, QLabel, QLineEdit, QFileDialog
 from PySide6.QtCore import Qt, Signal, QObject, QThread
+from PySide6.QtGui import QIcon, QPixmap
 import os
 fastapi_launcher_path = os.path.join(os.path.dirname(__file__), "plugin")
 import sys
@@ -598,3 +599,168 @@ class Updater(QWidget):
         print(tag)
         # print(tag)
         return tag
+    
+class ReportIssueDialog(QWidget):
+    def __init__(self, logFilePath=None):
+        super().__init__()
+        self.logFilePath = logFilePath
+        print(f"Initialized with logFilePath: {self.logFilePath}")
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Report Issue')
+        self.setGeometry(100, 100, 600, 300)
+        layout = QVBoxLayout()
+
+        layout.addWidget(QLabel('Error information:'))
+        self.errorInfoTextEdit = QTextEdit()
+        self.errorInfoTextEdit.setPlaceholderText("Describe the error or issue...")
+        layout.addWidget(self.errorInfoTextEdit)
+
+        layout.addWidget(QLabel('Additional information to include:'))
+        self.additionalInfoTextEdit = QTextEdit()
+        self.additionalInfoTextEdit.setPlaceholderText('Any extra details to help understand the issue...')
+        layout.addWidget(self.additionalInfoTextEdit)
+
+        self.attachLogCheckbox = QCheckBox("Attach log file")
+        if self.logFilePath and os.path.exists(self.logFilePath) and os.path.getsize(self.logFilePath) > 0:
+            self.attachLogCheckbox.setVisible(True)
+        else:
+            self.attachLogCheckbox.setVisible(False)
+        layout.addWidget(self.attachLogCheckbox)
+
+        layout.addWidget(QLabel('For immediate support you can join our Discord:'))
+        self.discordButton = QPushButton()
+        self.discordButton.setIcon(QIcon('Discord.png'))
+        self.discordButton.setIconSize(QPixmap('Discord.png').size())
+        self.discordButton.clicked.connect(self.joinDiscord)
+        layout.addWidget(self.discordButton)
+
+        self.sendReportButton = QPushButton('Send')
+        self.sendReportButton.clicked.connect(self.sendReport)
+        layout.addWidget(self.sendReportButton)
+
+        self.setLayout(layout)
+
+    def sendReport(self):
+        errorInfo = self.errorInfoTextEdit.toPlainText()
+        additionalInfo = self.additionalInfoTextEdit.toPlainText()
+        attachLog = self.attachLogCheckbox.isChecked()
+        print(f"Sending report with error info: '{errorInfo}' and additional info: '{additionalInfo}', attach log: {attachLog}")
+
+        data = {'description': f"Error Info: {errorInfo}\nAdditional Info: {additionalInfo}"}
+        print(data)
+        if attachLog and self.logFilePath:
+            print(f"Attaching log file at: {self.logFilePath}")
+            data['log_file_path'] = self.logFilePath
+
+        try:
+            response = requests.post("http://127.0.0.1:8000/report/", data=data)
+            print("Response Status Code:", response.status_code)
+            if response.ok:
+                print("Report sent successfully.")
+            else:
+                print(f"Failed to send report. Status code: {response.status_code}")
+        except requests.RequestException as e:
+            print(f"Error sending report: {e}")
+
+    def joinDiscord(self):
+        webbrowser.open('https://discord.gg/U7FymgCM')
+
+
+class LoginWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.backend_url = "http://localhost:8000"
+        self.initUI()
+        self.check_login()
+
+    def initUI(self):
+        self.layout = QVBoxLayout()
+
+        # Login Section
+        self.loginSection = QVBoxLayout()
+        loginTitle = QLabel('Login to Deepmake')
+        loginTitle.setStyleSheet('font-size: 18px; font-weight: bold;')
+
+        emailLayout = QHBoxLayout()
+        emailLabel = QLabel('Email')
+        self.emailInput = QLineEdit()
+        self.emailInput.setPlaceholderText('Textbox for Email')
+        emailLayout.addWidget(emailLabel)
+        emailLayout.addWidget(self.emailInput)
+
+        passwordLayout = QHBoxLayout()
+        passwordLabel = QLabel('Password')
+        self.passwordInput = QLineEdit()
+        self.passwordInput.setPlaceholderText('Textbox for Password')
+        self.passwordInput.setEchoMode(QLineEdit.EchoMode.Password)
+        passwordLayout.addWidget(passwordLabel)
+        passwordLayout.addWidget(self.passwordInput)
+
+        self.loginButton = QPushButton('Login')
+        self.loginButton.clicked.connect(self.login)
+
+        self.loginSection.addWidget(loginTitle)
+        self.loginSection.addLayout(emailLayout)
+        self.loginSection.addLayout(passwordLayout)
+        self.loginSection.addWidget(self.loginButton)
+
+        # Logged In Section
+        self.loggedInSection = QVBoxLayout()
+        self.loggedInLabel = QLabel('Logged in as ')
+        self.loggedInLabel.setVisible(False)  # Hide until logged in
+        self.logoutButton = QPushButton('Logout')
+        self.logoutButton.clicked.connect(self.logout)
+        self.logoutButton.setVisible(False)  # Hide until logged in
+
+        self.loggedInSection.addWidget(self.loggedInLabel)
+        self.loggedInSection.addWidget(self.logoutButton)
+
+        # Add sections to the main layout
+        self.layout.addLayout(self.loginSection)
+        self.layout.addLayout(self.loggedInSection)
+        self.setLayout(self.layout)
+
+    def check_login(self):
+        try:
+            response = requests.get(f"{self.backend_url}/login/status")
+            print(f"Checking login status: {response.json()}")
+            if response.status_code == 200 and response.json()['logged_in']:
+                user_info = response.json()
+                self.loggedInLabel.setText(f'Logged in as {user_info.get("username", "Unknown")}')
+                self.toggleLoginState(True)
+        except requests.exceptions.RequestException as e:
+            print(f"Failed to check login status: {e}")
+
+    def login(self):
+        username = self.emailInput.text()
+        password = self.passwordInput.text()
+        try:
+            url = f"{self.backend_url}/login/login?username={username}&password={password}"
+            response = requests.post(url)
+            print(f"Login response: {response.json()}")
+            if response.status_code == 200:
+                self.loggedInLabel.setText(f'Logged in as {username}')
+                self.toggleLoginState(True)
+            else:
+                print(response.json().get("message", "Login failed"))
+        except requests.exceptions.RequestException as e:
+            print(f"Login failed: {e}")
+
+    def logout(self):
+        try:
+            response = requests.post(f"{self.backend_url}/login/logout")
+            if response.status_code == 200:
+                self.toggleLoginState(False)
+        except requests.exceptions.RequestException as e:
+            print(f"Logout failed: {e}")
+
+    def toggleLoginState(self, loggedIn):
+        self.loginSection.setEnabled(not loggedIn)
+        self.loggedInLabel.setVisible(loggedIn)
+        self.logoutButton.setVisible(loggedIn)
+        if not loggedIn:
+            self.loggedInLabel.setText('')
+            self.emailInput.clear()
+            self.passwordInput.clear()

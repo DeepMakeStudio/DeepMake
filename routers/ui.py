@@ -7,7 +7,7 @@ import subprocess
 import requests
 # from test import ConfigGUI
 
-from gui import ConfigGUI, PluginManagerGUI, Updater
+from gui import ConfigGUI, PluginManagerGUI, Updater, ReportIssueDialog, LoginWidget
 
 router = APIRouter()
 
@@ -69,3 +69,36 @@ def center_screen(screen):
     geo = screen.frameGeometry()
     geo.moveCenter(center)
     screen.move(geo.topLeft())
+
+
+@router.get("/ui/report_issue", tags=["ui"])
+def report_issue():
+    if sys.platform != "darwin":
+        #log_file_path = '/home/andresca94/DeepMake/test_log_file.json'
+        app = QApplication([])
+        #window = ReportIssueDialog(logFilePath=log_file_path)
+        window = ReportIssueDialog()
+        window.show()
+        app.exec()
+
+        try:
+            sys.exit(app.exec())
+        except:
+            pass
+    else:
+        subprocess.Popen("python mac_show_ui.py -n ReportIssueDialog".split())
+
+@router.get("/ui/login", tags=["ui"])
+def report_issue():
+    if sys.platform != "darwin":
+        app = QApplication([])
+        window = LoginWidget()
+        window.show()
+        app.exec()
+
+        try:
+            sys.exit(app.exec())
+        except:
+            pass
+    else:
+        subprocess.Popen("python mac_show_ui.py -n ReportIssueDialog".split())

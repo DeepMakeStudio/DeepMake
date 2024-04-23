@@ -33,7 +33,7 @@ import sqlite3
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
 from update_gui import Updater
-from routers import ui, plugin_manager
+from routers import ui, plugin_manager, report, login
 
 import asyncio
 from huey.exceptions import TaskException
@@ -78,6 +78,8 @@ huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 app = FastAPI()
 app.include_router(ui.router)
 app.include_router(plugin_manager.router)
+app.include_router(report.router)
+app.include_router(login.router)
 client = requests.Session()
 
 port_mapping = {"main": 8000}
