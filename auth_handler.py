@@ -45,6 +45,10 @@ class auth_handler():
             return self.decoded_jwt['email']
         else:
             return None
+    
+    @property
+    def roles(self):
+        return self.check_roles()
 
     def update_jwt(self, jwt_token):
         self.JWT = jwt_token
@@ -97,6 +101,8 @@ class auth_handler():
             return False
 
     def check_roles(self):
+        if not self.logged_in:
+            return []
         if not self.validate_jwt():
             return []
         user_info = self.get_user_info()

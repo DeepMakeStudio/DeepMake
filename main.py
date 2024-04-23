@@ -265,25 +265,31 @@ def get_plugin_info(plugin_name: str):
 @app.get("/plugins/get_config/{plugin_name}")
 def get_plugin_config(plugin_name: str):
     if plugin_name in plugin_list: 
-        port = port_mapping[plugin_name]
-        r = client.get("http://127.0.0.1:" + port + "/get_config")
-        return r.json()
+        if plugin_name in port_mapping.keys():
+            port = port_mapping[plugin_name]
+            r = client.get("http://127.0.0.1:" + port + "/get_config")
+            return r.json()
+        else:
+            raise HTTPException(status_code=404, detail="Plugin must be running to check config")
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
 @app.put("/plugins/set_config/{plugin_name}")
 def set_plugin_config(plugin_name: str, config: dict):
     if plugin_name in plugin_list:
-        memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
-        available_memory = memory_func() 
-        # current_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
-        # initial_memory = available_memory + current_model_memory
-        port = port_mapping[plugin_name]
-        r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
-        # after_memory = memory_func()
-        # new_model_memory = initial_memory - after_memory
-        # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
-        return r.json()
+        if plugin_name in port_mapping.keys():
+            memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
+            available_memory = memory_func() 
+            # current_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
+            # initial_memory = available_memory + current_model_memory
+            port = port_mapping[plugin_name]
+            r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
+            # after_memory = memory_func()
+            # new_model_memory = initial_memory - after_memory
+            # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
+            return r.json()
+        else:
+            raise HTTPException(status_code=404, detail="Plugin must be running to change config")
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
@@ -699,6 +705,6 @@ async def get_file(url: str):
 async def check_login():
     if auth.logged_in:
         user = auth.get_user_info()
-        return {'logged_in': True, 'email': user['email'], 'roles': user['app_metadata']['roles']}
+        return {'logged_in': True, 'email': user['email'], 'roles': auth.roles}
     else:
         return {'logged_in': False}
