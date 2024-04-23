@@ -121,6 +121,15 @@ class auth_handler():
         else:
             return False
 
+    def permission_level(self):
+        if not self.logged_in:
+            return False
+        roles = self.check_roles()
+        if len(roles) > 0:
+            return 1
+        else:
+            return 0
+
     def logout(self):
         self.JWT = None
         self.refresh_token = None

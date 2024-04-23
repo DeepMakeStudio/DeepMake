@@ -708,3 +708,7 @@ async def check_login():
         return {'logged_in': True, 'email': user['email'], 'roles': auth.roles}
     else:
         return {'logged_in': False}
+
+@app.get("/login/subscription_level")
+async def subscription_level():
+    return {"status": "success", "subscription_level": auth.permission_level()}
