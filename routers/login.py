@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from auth_handler import auth_handler
 
+auth = auth_handler()
 router = APIRouter()
 
 @router.get("/login/status")
