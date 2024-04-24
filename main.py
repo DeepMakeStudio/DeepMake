@@ -34,6 +34,8 @@ import sqlite3
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
 from routers import ui, plugin_manager, report, login
+from shared_state import shared_state
+
 
 import asyncio
 from huey.exceptions import TaskException
@@ -127,6 +129,8 @@ def get_shared_resource():
 def get_app_state_data(request: Request):
     return request.app.state.resource.get_value()
 
+auth = auth_handler()
+
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
     if img_data == EmptyData:
@@ -148,8 +152,16 @@ def startup():
     global plugin_states
     plugin_states = {plugin: "INIT" for plugin in plugin_list}
     init_db()  # Initialize the database
-    app.state.resource = get_shared_resource()
+    set_value(auth)
 
+@app.get("/get-value/")
+def get_value():
+    return {"value": shared_state.get_value()}
+
+@app.post("/set-value/")
+def set_value(value: str):
+    shared_state.set_value(value)
+    return {"message": "Value set successfully"}
 
 def init_db():
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
@@ -280,25 +292,31 @@ def get_plugin_info(plugin_name: str):
 @app.get("/plugins/get_config/{plugin_name}")
 def get_plugin_config(plugin_name: str):
     if plugin_name in plugin_list: 
-        port = port_mapping[plugin_name]
-        r = client.get("http://127.0.0.1:" + port + "/get_config")
-        return r.json()
+        if plugin_name in port_mapping.keys():
+            port = port_mapping[plugin_name]
+            r = client.get("http://127.0.0.1:" + port + "/get_config")
+            return r.json()
+        else:
+            raise HTTPException(status_code=404, detail="Plugin must be running to check config")
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
 @app.put("/plugins/set_config/{plugin_name}")
 def set_plugin_config(plugin_name: str, config: dict):
     if plugin_name in plugin_list:
-        memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
-        available_memory = memory_func() 
-        # current_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
-        # initial_memory = available_memory + current_model_memory
-        port = port_mapping[plugin_name]
-        r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
-        # after_memory = memory_func()
-        # new_model_memory = initial_memory - after_memory
-        # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
-        return r.json()
+        if plugin_name in port_mapping.keys():
+            memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
+            available_memory = memory_func() 
+            # current_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
+            # initial_memory = available_memory + current_model_memory
+            port = port_mapping[plugin_name]
+            r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
+            # after_memory = memory_func()
+            # new_model_memory = initial_memory - after_memory
+            # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
+            return r.json()
+        else:
+            raise HTTPException(status_code=404, detail="Plugin must be running to change config")
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
@@ -684,3 +702,65 @@ def delete_data(key: str):
     conn.commit()
     conn.close()
     return {"message": "Data deleted successfully"}
+
+# @app.get("/ui/plugin_manager")
+# def plugin_manager():
+    
+#     app = QApplication(sys.argv)
+#     window = Window()
+#     apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
+#     window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
+#     window.show()
+#     try:
+#         sys.exit(app.exec())
+#     except:
+#         pass
+
+# @app.get("/ui/update")
+# def update():
+    
+#     app = QApplication(sys.argv)
+#     window = Updater()
+#     apply_stylesheet(app, theme='dark_purple.xml', invert_secondary=False, css_file="gui.css")
+#     window.setStyleSheet("QScrollBar::handle {background: #ffffff;} QScrollBar::handle:vertical:hover,QScrollBar::handle:horizontal:hover {background: #ffffff;} QTableView {background-color: rgba(239,0,86,0.5); font-weight: bold;} QHeaderView::section {font-weight: bold; background-color: #7b3bff; color: #ffffff} QTableView::item:selected {background-color: #7b3bff; color: #ffffff;} QPushButton:pressed {color: #ffffff; background-color: #7b3bff;} QPushButton {color: #ffffff;}")
+#     window.show()
+#     try:
+#         sys.exit(app.exec())
+#     except:
+#         pass
+
+@app.get("/login/status")
+async def get_login_status():
+    return {"logged_in": auth.logged_in}
+
+@app.post("/login/login")
+async def login(username: str, password: str):
+    if auth.login_with_credentials(username, password):
+        return {"status": "success", "message": "Logged in successfully"}
+    else:
+        return {"status": "failed", "message": "Login failed"}
+
+@app.post("/login/logout")
+async def logout():
+    auth.logout()
+    return {"status": "success", "message": "Logged out successfully"}
+
+@app.get("/login/username")
+async def get_username():
+    return {"username": auth.username}
+
+@app.get("/login/get_url")
+async def get_file(url: str):
+    return auth.get_url(url)
+
+@app.get("/login/check_login")
+async def check_login():
+    if auth.logged_in:
+        user = auth.get_user_info()
+        return {'logged_in': True, 'email': user['email'], 'roles': auth.roles}
+    else:
+        return {'logged_in': False}
+
+@app.get("/login/subscription_level")
+async def subscription_level():
+    return {"status": "success", "subscription_level": auth.permission_level()}
