@@ -7,12 +7,12 @@ import sys
 import requests
 import subprocess
 import webbrowser
-from db_utils import retrieve_data 
 from shared_state import shared_state
 
 
+
 client = requests.Session()
-auth = shared_state.get_value()
+
 
 
 class setWorker(QObject):
@@ -250,11 +250,14 @@ class Worker(QObject):
         r = client.get(f"http://127.0.0.1:8000/plugins/on_install/{self.plugin_name}")
 
         self.finished.emit()
+
 class UninstallWorker(QObject):
     plugin_name = ""
     finished = Signal()
     def run(self):
         r = client.get(f"http://127.0.0.1:8000/plugin_manager/uninstall/{self.plugin_name}")
+        r = client.get(f"http://127.0.0.1:8000/plugins/on_uninstall/{self.plugin_name}")
+
         self.finished.emit()
     
 
@@ -270,12 +273,9 @@ class PluginManagerGUI(QWidget):
         self.setWindowTitle(self.title) 
         self.setGeometry(100, 100, self.width, self.height) 
         # self.setStyleSheet( "color: white; border-color: #7b3bff")
-        self.thread_in_use = False
-        try:
-            self.plugin_dict = auth.get_url("https://deepmake.com/plugins.json")
-        except:
-            print("Error retrieving plugin info, using cached version")
-            self.plugin_dict = retrieve_data("plugin_info")
+
+        
+        self.plugin_dict = requests.get("http://127.0.0.1:8000/plugin_manager/get_plugin_info").json()
 
         self.createTable() 
 
@@ -290,11 +290,9 @@ class PluginManagerGUI(QWidget):
         self.layout = QVBoxLayout() 
         self.layout.addWidget(self.tableWidget) 
         self.setLayout(self.layout) 
-        self.threads = []
-        # self.workers = [Worker(), Worker1(), Worker(), Worker1()]
-        self.workers = [Worker(), Worker(), Worker(), Worker()]
-        for i in range(len(self.plugin_dict.keys())):
-            self.threads.append(QThread())
+        self.threads = [QThread() for i in range(len(self.plugin_dict.keys()))]
+        self.workers = [Worker() for i in range(len(self.plugin_dict.keys()))]
+    
         
 
 
@@ -444,66 +442,32 @@ class PluginManagerGUI(QWidget):
         self.tableWidget.setCellWidget(row, 4, button)
         print("Finish env", plugin_name)    
 
-    # def thread_process(self, popen_string, row_number, thread):
-
-    #     plugin_name = list(self.plugin_dict.keys())[row_number]
-    #     # while not self.thread.isFinished():
-    #     #     time.sleep(3)
-    #     #     wait_label = QTableWidgetItem(f"Waiting...")
-    #     #     self.tableWidget.removeCellWidget(row_number, 3)
-    #     #     self.tableWidget.setItem(row_number, 3, wait_label)
-    #     #     print("Waiting for thread to finish")
-    #     # self.thread = QThread()
-    #     worker = self.workers[row_number]
-    #     thread = self.threads[row_number]
-
-    #     worker.popen_string = popen_string
-    #     worker.plugin_name = plugin_name
-    #     worker.plugin_dict = self.plugin_dict
-
-    #     worker.moveToThread(thread)
-    #     thread.started.connect(worker.run)
-    #     worker.finished.connect(thread.quit)
-    #     worker.finished.connect(worker.deleteLater)
-    #     thread.finished.connect(thread.deleteLater)
-
-    #     thread.start()
-    #     thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
-    #     thread.finished.connect(lambda: self.Installed(plugin_name))
-    def setThreadUse(self, value):
-        self.thread_in_use = value
     def thread_process(self, popen_string, row_number, thread):
-            while self.thread_in_use:
-                import time
-                time.sleep(3)
-                print("Waiting for thread to finish")
-            
-            plugin_name = list(self.plugin_dict.keys())[row_number]
-            # while not self.thread.isFinished():
-            #     time.sleep(3)
-            #     wait_label = QTableWidgetItem(f"Waiting...")
-            #     self.tableWidget.removeCellWidget(row_number, 3)
-            #     self.tableWidget.setItem(row_number, 3, wait_label)
-            #     print("Waiting for thread to finish")
-            # self.thread = QThread()
-            self.thread_in_use = True
-            self.worker = Worker()
-            self.thread = QThread()
 
-            self.worker.popen_string = popen_string
-            self.worker.plugin_name = plugin_name
-            self.worker.plugin_dict = self.plugin_dict
+        plugin_name = list(self.plugin_dict.keys())[row_number]
+        # while not self.thread.isFinished():
+        #     time.sleep(3)
+        #     wait_label = QTableWidgetItem(f"Waiting...")
+        #     self.tableWidget.removeCellWidget(row_number, 3)
+        #     self.tableWidget.setItem(row_number, 3, wait_label)
+        #     print("Waiting for thread to finish")
+        # self.thread = QThread()
+        worker = self.workers[row_number]
+        thread = self.threads[row_number]
 
-            self.worker.moveToThread(self.thread)
-            self.thread.started.connect(self.worker.run)
-            self.worker.finished.connect(self.thread.quit)
-            self.worker.finished.connect(self.worker.deleteLater)
-            self.thread.finished.connect(self.thread.deleteLater)
+        worker.popen_string = popen_string
+        worker.plugin_name = plugin_name
+        worker.plugin_dict = self.plugin_dict
 
-            self.thread.start()
-            self.thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
-            self.thread.finished.connect(lambda: self.Installed(plugin_name))
-            self.thread.finished.connect(lambda: self.setThreadUse(False))
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+
+        thread.start()
+        thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
+        thread.finished.connect(lambda: self.Installed(plugin_name))
     
     def Installed(self, plugin_name):
         row = list(self.plugin_dict.keys()).index(plugin_name)

@@ -113,23 +113,9 @@ jobs = {}
 most_recent_use = []
 
 plugin_info = {}
-class SharedResource:
-    def __init__(self, auth):
-        self.auth = auth
-
-    def get_value(self):
-        return self.auth
-
-def get_shared_resource():
-    resource = SharedResource(auth = auth)
-    return resource
-
-
-@app.get("/app-state-data")
-def get_app_state_data(request: Request):
-    return request.app.state.resource.get_value()
 
 auth = auth_handler()
+print(auth.logged_in)
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
@@ -390,6 +376,11 @@ def on_install(plugin_name: str):
 @huey.task()
 def huey_on_install(plugin_name: str, dummy: Plugin):
     dummy.on_install({})
+
+@app.get("/plugins/on_uninstall/{plugin_name}")
+def on_uninstall(plugin_name: str):
+    Plugin().on_uninstall()
+    return {"status": "success", "message": f"{plugin_name} uninstalled"}
 
 @app.get("/plugins/stop_plugin/{plugin_name}")
 def stop_plugin(plugin_name: str):

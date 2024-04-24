@@ -24,6 +24,7 @@ def set_value(value: str):
 async def get_login_status():
     global auth
     auth = get_value()["value"]
+    print(auth.logged_in)
     return {"logged_in": auth.logged_in}
 
 @router.post("/login/login", tags=["login"])
