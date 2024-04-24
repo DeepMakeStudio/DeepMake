@@ -33,7 +33,7 @@ import sqlite3
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
 from update_gui import Updater
-from routers import ui, plugin_manager
+from routers import ui, plugin_manager, report, login
 
 import asyncio
 from huey.exceptions import TaskException
@@ -81,6 +81,8 @@ huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 app = FastAPI()
 app.include_router(ui.router)
 app.include_router(plugin_manager.router)
+app.include_router(report.router)
+app.include_router(login.router)
 client = requests.Session()
 
 port_mapping = {"main": 8000}
@@ -354,6 +356,18 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
 
     return {"started": True, "plugin_name": plugin_name, "port": port}
 
+@app.get("/plugins/on_install/{plugin_name}")
+def on_install(plugin_name: str):
+    job = huey_on_install(plugin_name, port_mapping)
+    return {"job_id": job.id}
+
+@huey.task()
+def huey_on_install(plugin_name: str, port_mapping):
+    port = port_mapping[plugin_name]
+    print(port)
+    r = client.post(f"http://127.0.0.1:{port}/plugins/install")
+    return r.json()
+
 @app.get("/plugins/stop_plugin/{plugin_name}")
 def stop_plugin(plugin_name: str):
     # need some test to ensure open port
@@ -488,6 +502,18 @@ def plugin_callback(plugin_name: str, status: str):
         plugin_states.pop(plugin_name)
         return {"status": "error", "message": f"{plugin_name} failed to start because {status}"}
 
+@app.post("/plugin_install_callback/{plugin_name}/{progress}/{stage}")
+async def plugin_install_callback(plugin_name: str, progress: float, stage: str):
+    # Handle installation progress update here
+    print(f"Installation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
+    return {"status": "success", "message": f"Received installation progress for {plugin_name}"}
+
+@app.post("/plugin_uninstall_callback/{plugin_name}/{progress}/{stage}")
+async def plugin_uninstall_callback(plugin_name: str, progress: float, stage: str):
+    # Handle uninstallation progress update here
+    print(f"Unistallation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
+    return {"status": "success", "message": f"Received uninstallation progress for {plugin_name}"}
+
 @app.get("/plugins/get_jobs")
 def get_running_jobs():
     for job in running_jobs:
@@ -541,7 +567,10 @@ def add_job(job: Job):
 @huey.post_execute()
 def record_memory(task, task_value, exc):
     if task_value is not None:
-        task_data = retrieve_data(f"{task.id}_available")
+        try:
+            task_data = retrieve_data(f"{task.id}_available")
+        except:
+            return
 
         plugin_states = task_data["plugin_states"]
         running_jobs = task_data["running_jobs"]

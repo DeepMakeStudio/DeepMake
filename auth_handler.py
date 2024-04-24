@@ -8,7 +8,6 @@ class auth_handler():
     def __init__(self, refresh_token = None, JWT = None, username = None, password = None):
         self.JWT = None
         self.refresh_token = None
-        # self.decoded_jwt = None
         self.storage = storage_db()
 
         if JWT is not None:
