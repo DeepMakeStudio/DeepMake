@@ -1,15 +1,37 @@
-from fastapi import APIRouter
-from auth_handler import auth_handler
+from fastapi import APIRouter, FastAPI, Depends, Request, Header
+import requests
 
-auth = auth_handler()
 router = APIRouter()
+auth = None
+client = requests.Session()
+
+# @router.get("/")
+# def some_router_function(request: Request):
+#     global auth
+#     auth = request.app.state.resource
+#     return {"auth": auth}
 
 @router.get("/login/status")
 async def get_login_status():
+    auth_check()
     return {"logged_in": auth.logged_in}
+
+def auth_check():
+    
+    global auth
+    print("hello")
+    r = client.get(f"http://127.0.0.1:8000/plugins/get_list")
+    print(r.json())
+    if auth is None:
+        r = client.get("http://127.0.0.1:8000/app-state-data", timeout=10)
+
+    # auth = r.json()
+
+    print("authenticator:", auth)
 
 @router.post("/login/login")
 async def login(username: str, password: str):
+
     if auth.login_with_credentials(username, password):
         return {"status": "success", "message": "Logged in successfully"}
     else:
@@ -17,6 +39,7 @@ async def login(username: str, password: str):
 
 @router.post("/login/logout")
 async def logout():
+
     auth.logout()
     return {"status": "success", "message": "Logged out successfully"}
 
@@ -26,6 +49,7 @@ async def get_username():
 
 @router.get("/login/get_url")
 async def get_file(url: str):
+
     return auth.get_url(url)
 
 @router.get("/login/check_login")

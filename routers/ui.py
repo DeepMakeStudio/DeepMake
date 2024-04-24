@@ -5,12 +5,8 @@ import sys
 import os
 import subprocess
 import requests
-# from test import ConfigGUI
-
-from gui import ConfigGUI, PluginManagerGUI, Updater, ReportIssueDialog, LoginWidget
 
 router = APIRouter()
-app = None
 
 @router.get("/ui/plugin_manager", tags=["ui"])
 def plugin_manager():
@@ -31,7 +27,6 @@ def plugin_manager():
 
 @router.get("/ui/configure/{plugin_name}", tags=["ui"])
 def plugin_config_ui(plugin_name: str):
-    global app
 
     try:
         r = requests.get(f"http://127.0.0.1:8000/plugins/get_config/{plugin_name}")
@@ -72,12 +67,6 @@ def update_gui():
     # else:
     subprocess.Popen("python mac_show_ui.py -n Updater".split())
 
-
-def center_screen(screen):
-    center = QScreen.availableGeometry(QApplication.primaryScreen()).center()
-    geo = screen.frameGeometry()
-    geo.moveCenter(center)
-    screen.move(geo.topLeft())
 
 
 @router.get("/ui/report_issue", tags=["ui"])

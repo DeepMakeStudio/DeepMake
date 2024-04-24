@@ -10,9 +10,13 @@ import json
 import webbrowser
 from auth_handler import auth_handler
 import time
+from db_utils import retrieve_data 
+
 
 client = requests.Session()
 auth = auth_handler()
+
+
 class setWorker(QObject):
     name = ""
     output_config = {}
@@ -234,26 +238,27 @@ class Worker(QObject):
     popen_string = " "
     plugin_name = ""
     finished = Signal()
+    plugin_dict = {}
     # progress = Signal(int)
     def run(self):
         """Long-running task."""
+        r = client.post(f"http://127.0.0.1:8000/plugin_manager/install/{self.plugin_name}", json = self.plugin_dict)
+
         if sys.platform != "win32":
             p = subprocess.Popen(self.popen_string.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:   
             p = subprocess.Popen(self.popen_string, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         p.wait()
-        r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{self.plugin_name}")
-        state = "STARTING"
-        while state != "RUNNING":
-            r = client.get(f"http://127.0.0.1:8000/plugins/get_states/")
-            plugin_states = r.json()
-            state = plugin_states[self.plugin_name]["state"]
-            time.sleep(3)
-        
         r = client.get(f"http://127.0.0.1:8000/plugins/on_install/{self.plugin_name}")
-        r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{self.plugin_name}")
 
         self.finished.emit()
+class UninstallWorker(QObject):
+    plugin_name = ""
+    finished = Signal()
+    def run(self):
+        r = client.get(f"http://127.0.0.1:8000/plugin_manager/uninstall/{self.plugin_name}")
+        self.finished.emit()
+    
 
 class PluginManagerGUI(QWidget):
     def __init__(self):
@@ -269,8 +274,10 @@ class PluginManagerGUI(QWidget):
         # self.setStyleSheet( "color: white; border-color: #7b3bff")
         r = client.get(f"http://127.0.0.1:8000/plugins/get_list")
    
-        
-        self.plugin_dict = auth.get_url("https://deepmake.com/plugins.json")
+        try:
+            self.plugin_dict = auth.get_url("https://deepmake.com/plugins.json")
+        except:
+            self.plugin_dict = retrieve_data("plugin_info")
 
         self.createTable() 
 
@@ -285,6 +292,14 @@ class PluginManagerGUI(QWidget):
         self.layout = QVBoxLayout() 
         self.layout.addWidget(self.tableWidget) 
         self.setLayout(self.layout) 
+        self.threads = []
+        # self.workers = [Worker(), Worker1(), Worker(), Worker1()]
+        self.workers = [Worker(), Worker(), Worker(), Worker()]
+        for i in range(len(self.plugin_dict.keys())):
+            self.threads.append(QThread())
+        
+
+
         # self.setFixedSize(self.layout.sizeHint())
 
 
@@ -344,6 +359,7 @@ class PluginManagerGUI(QWidget):
         self.tableWidget.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
 
     def install_button_creation(self, plugin_name):
+        
         row = list(self.plugin_dict.keys()).index(plugin_name)
         if "url" not in self.plugin_dict[plugin_name].keys():
             button = QPushButton(f"Subscribe")
@@ -369,9 +385,16 @@ class PluginManagerGUI(QWidget):
         self.tableWidget.setItem(row_number, 3, installing_item)
         installing_item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
         folder_path = os.path.join(os.path.dirname(__file__), "plugin", plugin_name)
-        r = client.post(f"http://127.0.0.1:8000/plugin_manager/install/{plugin_name}", json = self.plugin_dict)
-
-        self.thread_process(f"conda env create -f {folder_path}/environment.yml", row_number)
+        # if row_number == 0:
+        #     thread = self.thread0
+        # elif row_number == 1:
+        #     thread = self.thread1
+        # elif row_number == 2:
+        #     thread = self.thread2
+        # elif row_number == 3:
+        #     thread = self.thread3
+        thread = ""
+        self.thread_process(f"conda env create -f {folder_path}/environment.yml", row_number, thread)
 
     def uninstall_plugin(self, plugin_name):
         if plugin_name not in os.listdir(fastapi_launcher_path):
@@ -381,11 +404,29 @@ class PluginManagerGUI(QWidget):
         dlg = CustomDialog(plugin_name)
         if dlg.exec():
             print("Uninstalling", plugin_name)
-            r = client.get(f"http://127.0.0.1:8000/plugin_manager/uninstall/{plugin_name}")
-            self.button_dict.pop(plugin_name)
-            self.tableWidget.removeCellWidget(list(self.plugin_dict.keys()).index(plugin_name), 2)
+            self.thread_uninstall(plugin_name)
+            # self.button_dict.pop(plugin_name)
+            # self.tableWidget.removeCellWidget(list(self.plugin_dict.keys()).index(plugin_name), 2)
             self.install_button_creation(plugin_name)
             self.manage(plugin_name)
+
+    def thread_uninstall(self, plugin_name):
+        self.uninstall_worker = UninstallWorker()
+        self.uninstall_thread = QThread()
+        self.uninstall_worker.plugin_name = plugin_name
+
+        self.uninstall_worker.moveToThread(self.uninstall_thread)
+        self.uninstall_thread.started.connect(self.uninstall_worker.run)
+        self.uninstall_worker.finished.connect(self.uninstall_thread.quit)
+        self.uninstall_worker.finished.connect(self.uninstall_worker.deleteLater)
+        self.uninstall_thread.finished.connect(self.uninstall_thread.deleteLater)
+
+        self.uninstall_thread.start()
+        self.uninstall_thread.finished.connect(lambda: self.button_dict.pop(plugin_name))
+        self.uninstall_thread.finished.connect(lambda: self.tableWidget.removeCellWidget(list(self.plugin_dict.keys()).index(plugin_name), 4))
+        self.uninstall_thread.finished.connect(lambda: self.install_button_creation(plugin_name))
+        self.uninstall_thread.finished.connect(lambda: self.manage(plugin_name))
+
     
     def manage(self, plugin_name):
         row = list(self.plugin_dict.keys()).index(plugin_name)
@@ -405,24 +446,32 @@ class PluginManagerGUI(QWidget):
         self.tableWidget.setCellWidget(row, 4, button)
         print("Finish env", plugin_name)    
 
-    def thread_process(self, popen_string, row_number):
+    def thread_process(self, popen_string, row_number, thread):
 
-        self.thread = QThread()
         plugin_name = list(self.plugin_dict.keys())[row_number]
+        # while not self.thread.isFinished():
+        #     time.sleep(3)
+        #     wait_label = QTableWidgetItem(f"Waiting...")
+        #     self.tableWidget.removeCellWidget(row_number, 3)
+        #     self.tableWidget.setItem(row_number, 3, wait_label)
+        #     print("Waiting for thread to finish")
+        # self.thread = QThread()
+        worker = self.workers[row_number]
+        thread = self.threads[row_number]
 
-        self.worker = Worker()
-        self.worker.popen_string = popen_string
-        self.worker.plugin_name = plugin_name
+        worker.popen_string = popen_string
+        worker.plugin_name = plugin_name
+        worker.plugin_dict = self.plugin_dict
 
-        self.worker.moveToThread(self.thread)
-        self.thread.started.connect(self.worker.run)
-        self.worker.finished.connect(self.thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
 
-        self.thread.start()
-        self.thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
-        self.thread.finished.connect(lambda: self.Installed(plugin_name))
+        thread.start()
+        thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
+        thread.finished.connect(lambda: self.Installed(plugin_name))
     
     def Installed(self, plugin_name):
         row = list(self.plugin_dict.keys()).index(plugin_name)

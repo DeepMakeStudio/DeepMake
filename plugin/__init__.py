@@ -78,11 +78,17 @@ class Plugin():
     Generic plugin class
     """
 
-    def __init__(self, arguments):
+    def __init__(self, arguments={}):
         self.plugin_name = "default"
-        self.plugin = arguments.plugin
-        self.config = arguments.config
-        self.endpoints = arguments.endpoints
+        if arguments == {}:
+            self.plugin = {}
+            self.config = {}
+            self.endpoints = {}
+        else:
+            self.plugin = arguments.plugin
+            self.config = arguments.config
+            self.endpoints = arguments.endpoints
+            
 
         # Create a plugin-specific storage path
         self.plugin_storage_path = os.path.join(storage_folder, self.plugin_name)

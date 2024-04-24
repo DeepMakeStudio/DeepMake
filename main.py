@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Response
+from fastapi import FastAPI, HTTPException, File, UploadFile, Response, Request
 from fastapi.responses import RedirectResponse
 from typing import Optional, List
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ import re
 from PIL import Image
 from io import BytesIO
 from auth_handler import auth_handler
+from plugin import Plugin
 
 import os
 import base64
@@ -32,11 +33,13 @@ from hashlib import md5
 import sqlite3    
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
-from update_gui import Updater
 from routers import ui, plugin_manager, report, login
 
 import asyncio
 from huey.exceptions import TaskException
+from fastapi import Depends
+
+
 CONDA = "MiniConda3"
 
 def get_id(): # return md5 hash of uuid.getnode()
@@ -94,11 +97,6 @@ class Task(BaseModel):
     name: str
     description: Optional[str] = None
 
-class Plugin(BaseModel):
-    id: str
-    name: str
-    tasks: List[Task] = []
-
 class Job(BaseModel):
     id: str
     task: Task
@@ -113,6 +111,21 @@ jobs = {}
 most_recent_use = []
 
 plugin_info = {}
+class SharedResource:
+    def __init__(self, auth):
+        self.auth = auth
+
+    def get_value(self):
+        return self.auth
+
+def get_shared_resource():
+    resource = SharedResource(auth = auth)
+    return resource
+
+
+@app.get("/app-state-data")
+def get_app_state_data(request: Request):
+    return request.app.state.resource.get_value()
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
@@ -135,6 +148,8 @@ def startup():
     global plugin_states
     plugin_states = {plugin: "INIT" for plugin in plugin_list}
     init_db()  # Initialize the database
+    app.state.resource = get_shared_resource()
+
 
 def init_db():
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
@@ -228,11 +243,14 @@ def get_plugin_list():
 @app.get("/plugins/get_info/{plugin_name}")
 def get_plugin_info(plugin_name: str):
     try:
-        # r = client.get(f"https://deepmake.com/plugins.json")
-        print(auth.logged_in)
         r = auth.get_url("https://deepmake.com/plugins.json")
-    except:
-        raise HTTPException(status_code=404, detail="Must be logged to use plugins")
+        store_data("plugin_info", r)
+    except Exception as e:
+        try:
+            r = retrieve_data("plugin_info")
+            print("Can't connect to Internet, using cached file")
+        except:
+            raise HTTPException(status_code=500, detail="Failed to retrieve plugin info, please connect to the Internet")
     
     if plugin_name in plugin_list: 
         if plugin_name not in plugin_info.keys():
@@ -347,15 +365,13 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
 
 @app.get("/plugins/on_install/{plugin_name}")
 def on_install(plugin_name: str):
-    job = huey_on_install(plugin_name, port_mapping)
+    dummy = Plugin()
+    job = huey_on_install(plugin_name, dummy)
     return {"job_id": job.id}
 
 @huey.task()
-def huey_on_install(plugin_name: str, port_mapping):
-    port = port_mapping[plugin_name]
-    print(port)
-    r = client.post(f"http://127.0.0.1:{port}/plugins/install")
-    return r.json()
+def huey_on_install(plugin_name: str, dummy: Plugin):
+    dummy.on_install({})
 
 @app.get("/plugins/stop_plugin/{plugin_name}")
 def stop_plugin(plugin_name: str):
