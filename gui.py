@@ -391,7 +391,7 @@ class PluginManagerGUI(QWidget):
             print("Plugin not installed")
             return
         
-        dlg = CustomDialog(plugin_name)
+        dlg = CustomDialog(plugin_name, self.plugin_dict[plugin_name])
         if dlg.exec():
             print("Uninstalling", plugin_name)
             self.thread_uninstall(plugin_name)
@@ -399,6 +399,8 @@ class PluginManagerGUI(QWidget):
             # self.tableWidget.removeCellWidget(list(self.plugin_dict.keys()).index(plugin_name), 2)
             self.install_button_creation(plugin_name)
             self.manage(plugin_name)
+    def changeVersion(self, text):
+        self.tableWidget.setCellWidget(1, 2, text)
 
     def thread_uninstall(self, plugin_name):
         self.uninstall_worker = UninstallWorker()
@@ -471,12 +473,13 @@ class PluginManagerGUI(QWidget):
         self.tableWidget.setItem(row, 3, install_label)
 
 class CustomDialog(QDialog):
-    def __init__(self, plugin_name):
+    def __init__(self, plugin_name, plugin_info):
         super().__init__()
         self.name = plugin_name
         self.setWindowTitle("Manage")
         self.setGeometry(0, 0, 500, 200) 
-
+        self.plugin_info = plugin_info
+        self.install_url =  self.plugin_info["url"]
 
         self.buttonBox = QDialogButtonBox()
         self.buttonBox.addButton("Uninstall", QDialogButtonBox.ButtonRole.AcceptRole)
@@ -516,12 +519,16 @@ class CustomDialog(QDialog):
 
     def version_management(self):
         tag_list = []
-        origin_folder = os.path.dirname(__file__)
-        os.chdir(os.path.join(origin_folder, "plugin", self.name))
-        tags = subprocess.check_output("git tag".split()).decode("utf-8")
-        os.chdir(origin_folder)
-        for label in tags.split("\n")[:-1]:
-            tag_list.append(label)
+        if ".git" in self.install_url:
+            origin_folder = os.path.dirname(__file__)
+            os.chdir(os.path.join(origin_folder, "plugin", self.name))
+            tags = subprocess.check_output("git tag".split()).decode("utf-8")
+            os.chdir(origin_folder)
+            for label in tags.split("\n")[:-1]:
+                tag_list.append(label)
+        else:
+            tag_list.append(self.install_url.split("/")[-1].split("-")[1].split(".")[0])
+            # tag_list.append("No Versioning")
         return tag_list
 
     def createTable(self): 
@@ -555,17 +562,21 @@ class CustomDialog(QDialog):
         self.tableWidget.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.tableWidget.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.tableWidget.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+
     def changeVersion(self, text):
         self.update_button.setText(f"Update to {text}")
 
     def getVersion(self):
-        origin_folder = os.path.join(fastapi_launcher_path, self.name)
-        os.chdir(origin_folder)
-        try:
-            tag = subprocess.check_output("git describe --tags".split()).decode("utf-8").split("\n")[0]
-        except:
-            tag = "0.0.0"
-        os.chdir(os.path.dirname(__file__))
+        if ".git" in self.install_url:
+            origin_folder = os.path.join(fastapi_launcher_path, self.name)
+            os.chdir(origin_folder)
+            try:
+                tag = subprocess.check_output("git describe --tags".split()).decode("utf-8").split("\n")[0]
+            except:
+                tag = "0.0.0"
+            os.chdir(os.path.dirname(__file__))
+        else:
+            tag = self.install_url.split("/")[-1].split("-")[1].split(".")[0]
         # print(tag)
         return tag
 
