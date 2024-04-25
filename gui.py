@@ -7,9 +7,6 @@ import sys
 import requests
 import subprocess
 import webbrowser
-from shared_state import shared_state
-
-
 
 client = requests.Session()
 

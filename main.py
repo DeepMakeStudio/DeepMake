@@ -8,7 +8,7 @@ import time
 import re
 from PIL import Image
 from io import BytesIO
-from auth_handler import auth_handler
+from auth_handler import auth_handler as auth
 from plugin import Plugin
 
 import os
@@ -34,13 +34,10 @@ import sqlite3
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
 from routers import ui, plugin_manager, report, login
-from shared_state import shared_state
-
 
 import asyncio
 from huey.exceptions import TaskException
 from fastapi import Depends
-
 
 CONDA = "MiniConda3"
 
@@ -91,7 +88,6 @@ port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
 plugin_memory = {}
-auth = auth_handler()
 PLUGINS_DIRECTORY = "plugin"
 
 class Task(BaseModel):
@@ -114,7 +110,6 @@ most_recent_use = []
 
 plugin_info = {}
 
-auth = auth_handler()
 print(auth.logged_in)
 
 def fetch_image(img_id):
@@ -138,16 +133,6 @@ def startup():
     global plugin_states
     plugin_states = {plugin: "INIT" for plugin in plugin_list}
     init_db()  # Initialize the database
-    set_value(auth)
-
-@app.get("/get-value/")
-def get_value():
-    return {"value": shared_state.get_value()}
-
-@app.post("/set-value/")
-def set_value(value: str):
-    shared_state.set_value(value)
-    return {"message": "Value set successfully"}
 
 def init_db():
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))

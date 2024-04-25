@@ -4,26 +4,15 @@ import subprocess
 from fastapi import APIRouter
 import requests
 import io
-from shared_state import shared_state
+from auth_handler import auth_handler as auth
 import zipfile
 from db_utils import retrieve_data 
 
 
 router = APIRouter()
 
-@router.get("/get-auth/", tags=["plugin_manager"])
-def get_value():
-    return {"value": shared_state.get_value()}
-
-@router.post("/set-auth/", tags=["plugin_manager"])
-def set_value(value: str):
-    shared_state.set_value(value)
-    return {"message": "Value set successfully"}
-
 @router.get("/load_auth", tags=["plugin_manager"])
 async def get_login_status():
-    global auth
-    auth = get_value()["value"]
     print(auth.logged_in)
     return {"logged_in": auth.logged_in}
 
@@ -77,8 +66,6 @@ def update_plugin(plugin_name: str, version: str):
 
 @router.get("/plugin_manager/get_plugin_info", tags=["plugin_manager"])
 def plugin_info():
-    global auth
-    auth = get_value()["value"]
     print(auth.logged_in)
     try:
         plugin_dict = auth.get_url("https://deepmake.com/plugins.json")

@@ -1,18 +1,9 @@
 from fastapi import APIRouter, FastAPI, Depends, Request, Header
 import requests
-from shared_state import shared_state
+from auth_handler import auth_handler as auth
 
 router = APIRouter()
 client = requests.Session()
-
-@router.get("/get-value/", tags=["login"])
-def get_value():
-    return {"value": shared_state.get_value()}
-
-@router.post("/set-value/", tags=["login"])
-def set_value(value: str):
-    shared_state.set_value(value)
-    return {"message": "Value set successfully"}
 
 # @router.get("/")
 # def some_router_function(request: Request):
@@ -22,8 +13,6 @@ def set_value(value: str):
 
 @router.get("/login/status", tags=["login"])
 async def get_login_status():
-    global auth
-    auth = get_value()["value"]
     print(auth.logged_in)
     return {"logged_in": auth.logged_in}
 

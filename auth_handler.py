@@ -4,7 +4,7 @@ import requests
 import time
 from storage_db import storage_db
 
-class auth_handler():
+class AuthHandler():
     def __init__(self, refresh_token = None, JWT = None, username = None, password = None):
         self.JWT = None
         self.refresh_token = None
@@ -134,3 +134,5 @@ class auth_handler():
         self.refresh_token = None
         self.storage.store_data('auth', {})
         return True
+
+auth_handler = AuthHandler()
