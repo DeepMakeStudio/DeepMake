@@ -49,15 +49,23 @@ async def uninstall_plugin(plugin_name: str):
 
 @router.get("/update/{plugin_name}/{version}")
 def update_plugin(plugin_name: str, version: str):
+    plugin_url = plugin_info()[plugin_name]["url"]
+    folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
 
+    if ".git" in plugin_url or plugin_name == "DeepMake":
+        origin_folder = os.path.dirname(os.path.dirname(__file__))
+        if plugin_name != "DeepMake":
+            os.chdir(os.path.join(origin_folder, "plugin", plugin_name))
+            # print(p.communicate())
+        p = subprocess.Popen(f"git checkout {version} ".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p.wait()
+        os.chdir(origin_folder)
+    else:
 
-    origin_folder = os.path.dirname(os.path.dirname(__file__))
-    if plugin_name != "DeepMake":
-        os.chdir(os.path.join(origin_folder, "plugin", plugin_name))
-        # print(p.communicate())
-    p = subprocess.Popen(f"git checkout {version} ".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    p.wait()
-    os.chdir(origin_folder)
+        new_version_url = "/".join(plugin_url.split("/")[:-1]) + f"{plugin_name}-{version}.zip"
+        r = requests.get(new_version_url)
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        z.extractall(folder_path)
 
     return {"status": "success"}
 
