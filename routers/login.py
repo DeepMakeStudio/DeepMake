@@ -11,12 +11,12 @@ client = requests.Session()
 #     auth = request.app.state.resource
 #     return {"auth": auth}
 
-@router.get("/login/status", tags=["login"])
+@router.get("/status")
 async def get_login_status():
     print(auth.logged_in)
     return {"logged_in": auth.logged_in}
 
-@router.post("/login/login", tags=["login"])
+@router.post("/login")
 async def login(username: str, password: str):
 
     if auth.login_with_credentials(username, password):
@@ -24,25 +24,29 @@ async def login(username: str, password: str):
     else:
         return {"status": "failed", "message": "Login failed"}
 
-@router.post("/login/logout", tags=["login"])
+@router.post("/logout")
 async def logout():
 
     auth.logout()
     return {"status": "success", "message": "Logged out successfully"}
 
-@router.get("/login/username", tags=["login"])
+@router.get("/username")
 async def get_username():
     return {"username": auth.username}
 
-@router.get("/login/get_url", tags=["login"])
+@router.get("/get_url")
 async def get_file(url: str):
 
     return auth.get_url(url)
 
-@router.get("/login/check_login", tags=["login"])
+@router.get("/check_login")
 async def check_login():
     if auth.logged_in:
         user = auth.get_user_info()
         return {'logged_in': True, 'email': user['email'], 'roles': user['app_metadata']['roles']}
     else:
         return {'logged_in': False}
+
+@router.get("/subscription_level")
+async def subscription_level():
+    return {"status": "success", "subscription_level": auth.permission_level()}

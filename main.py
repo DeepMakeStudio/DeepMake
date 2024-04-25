@@ -78,10 +78,10 @@ storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'h
 huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 
 app = FastAPI()
-app.include_router(ui.router)
-app.include_router(plugin_manager.router)
-app.include_router(report.router)
-app.include_router(login.router)
+app.include_router(ui.router, tags=["ui"], prefix="/ui")
+app.include_router(plugin_manager.router, tags=["plugin_manager"], prefix="/plugin_manager")
+app.include_router(report.router, tags=["report"], prefix="/report")
+app.include_router(login.router, tags=["login"], prefix="/login")
 client = requests.Session()
 
 port_mapping = {"main": 8000}
@@ -704,39 +704,3 @@ def delete_data(key: str):
 #         sys.exit(app.exec())
 #     except:
 #         pass
-
-@app.get("/login/status")
-async def get_login_status():
-    return {"logged_in": auth.logged_in}
-
-@app.post("/login/login")
-async def login(username: str, password: str):
-    if auth.login_with_credentials(username, password):
-        return {"status": "success", "message": "Logged in successfully"}
-    else:
-        return {"status": "failed", "message": "Login failed"}
-
-@app.post("/login/logout")
-async def logout():
-    auth.logout()
-    return {"status": "success", "message": "Logged out successfully"}
-
-@app.get("/login/username")
-async def get_username():
-    return {"username": auth.username}
-
-@app.get("/login/get_url")
-async def get_file(url: str):
-    return auth.get_url(url)
-
-@app.get("/login/check_login")
-async def check_login():
-    if auth.logged_in:
-        user = auth.get_user_info()
-        return {'logged_in': True, 'email': user['email'], 'roles': auth.roles}
-    else:
-        return {'logged_in': False}
-
-@app.get("/login/subscription_level")
-async def subscription_level():
-    return {"status": "success", "subscription_level": auth.permission_level()}

@@ -8,7 +8,7 @@ import requests
 
 router = APIRouter()
 
-@router.get("/ui/plugin_manager", tags=["ui"])
+@router.get("/plugin_manager")
 def plugin_manager():
     # global app
     # if sys.platform != "darwin":
@@ -25,7 +25,7 @@ def plugin_manager():
     # else:
     subprocess.Popen("python mac_show_ui.py -n PluginManager".split())
 
-@router.get("/ui/configure/{plugin_name}", tags=["ui"])
+@router.get("/configure/{plugin_name}")
 def plugin_config_ui(plugin_name: str):
 
     try:
@@ -49,7 +49,7 @@ def plugin_config_ui(plugin_name: str):
     # else:
     subprocess.Popen(f"python mac_show_ui.py -n Config -p {plugin_name}".split())
 
-@router.get("/ui/updater", tags=["ui"])
+@router.get("/updater")
 def update_gui():
     # global app
 
@@ -69,7 +69,7 @@ def update_gui():
 
 
 
-@router.get("/ui/report_issue", tags=["ui"])
+@router.get("/report_issue")
 def report_issue():
     # global app
 
@@ -89,7 +89,7 @@ def report_issue():
     # else:
     subprocess.Popen("python mac_show_ui.py -n ReportIssueDialog".split())
 
-@router.get("/ui/login", tags=["ui"])
+@router.get("/login")
 def login():
     # global app
 

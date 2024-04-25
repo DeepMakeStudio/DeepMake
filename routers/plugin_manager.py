@@ -8,15 +8,9 @@ from auth_handler import auth_handler as auth
 import zipfile
 from db_utils import retrieve_data 
 
-
 router = APIRouter()
 
-@router.get("/load_auth", tags=["plugin_manager"])
-async def get_login_status():
-    print(auth.logged_in)
-    return {"logged_in": auth.logged_in}
-
-@router.post("/plugin_manager/install/{plugin_name}", tags=["plugin_manager"])
+@router.post("/install/{plugin_name}")
 async def install_plugin(plugin_name: str, plugin_dict: dict):
     url = plugin_dict[plugin_name]["url"]
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
@@ -40,7 +34,7 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
         print("Installed", plugin_name)
     return {"status": "success"}
 
-@router.get("/plugin_manager/uninstall/{plugin_name}", tags=["plugin_manager"])
+@router.get("/uninstall/{plugin_name}")
 async def uninstall_plugin(plugin_name: str):
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
     print(folder_path)
@@ -50,7 +44,7 @@ async def uninstall_plugin(plugin_name: str):
         p = subprocess.Popen(f"rmdir /s /q {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return {"status": "success"}
 
-@router.get("/plugin_manager/update/{plugin_name}/{version}", tags=["plugin_manager"])
+@router.get("/update/{plugin_name}/{version}")
 def update_plugin(plugin_name: str, version: str):
 
 
@@ -64,7 +58,7 @@ def update_plugin(plugin_name: str, version: str):
 
     return {"status": "success"}
 
-@router.get("/plugin_manager/get_plugin_info", tags=["plugin_manager"])
+@router.get("/get_plugin_info")
 def plugin_info():
     print(auth.logged_in)
     try:
