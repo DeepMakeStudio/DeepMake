@@ -244,8 +244,6 @@ class Worker(QObject):
         else:   
             p = subprocess.Popen(self.popen_string, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         p.wait()
-        r = client.get(f"http://127.0.0.1:8000/plugins/on_install/{self.plugin_name}")
-
         self.finished.emit()
 
 class UninstallWorker(QObject):
@@ -253,7 +251,6 @@ class UninstallWorker(QObject):
     finished = Signal()
     def run(self):
         r = client.get(f"http://127.0.0.1:8000/plugin_manager/uninstall/{self.plugin_name}")
-        r = client.get(f"http://127.0.0.1:8000/plugins/on_uninstall/{self.plugin_name}")
 
         self.finished.emit()
     

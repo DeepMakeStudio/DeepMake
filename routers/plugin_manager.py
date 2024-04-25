@@ -7,6 +7,7 @@ import io
 from auth_handler import auth_handler as auth
 import zipfile
 from db_utils import retrieve_data 
+from plugin import Plugin
 
 router = APIRouter()
 
@@ -28,6 +29,7 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
         # p = subprocess.Popen(f"tar -xf {plugin_name}.zip -C {plugin_folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
     print(out, err)
+    Plugin().on_install({})
     if "already exists" in err.decode("utf-8"):
         print("Plugin already installed")
     else:
@@ -42,6 +44,7 @@ async def uninstall_plugin(plugin_name: str):
         p = subprocess.Popen(f"rm -rf {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         p = subprocess.Popen(f"rmdir /s /q {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    Plugin().on_uninstall()
     return {"status": "success"}
 
 @router.get("/update/{plugin_name}/{version}")

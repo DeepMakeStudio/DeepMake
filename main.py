@@ -352,21 +352,6 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
 
     return {"started": True, "plugin_name": plugin_name, "port": port}
 
-@app.get("/plugins/on_install/{plugin_name}")
-def on_install(plugin_name: str):
-    dummy = Plugin()
-    job = huey_on_install(plugin_name, dummy)
-    return {"job_id": job.id}
-
-@huey.task()
-def huey_on_install(plugin_name: str, dummy: Plugin):
-    dummy.on_install({})
-
-@app.get("/plugins/on_uninstall/{plugin_name}")
-def on_uninstall(plugin_name: str):
-    Plugin().on_uninstall()
-    return {"status": "success", "message": f"{plugin_name} uninstalled"}
-
 @app.get("/plugins/stop_plugin/{plugin_name}")
 def stop_plugin(plugin_name: str):
     # need some test to ensure open port
