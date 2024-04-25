@@ -43,7 +43,7 @@ async def get_file(url: str):
 async def check_login():
     if auth.logged_in:
         user = auth.get_user_info()
-        return {'logged_in': True, 'email': user['email'], 'roles': user['app_metadata']['roles']}
+        return {'logged_in': True, 'email': user['email'], 'roles': auth.roles}
     else:
         return {'logged_in': False}
 
