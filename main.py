@@ -234,12 +234,12 @@ def get_plugin_info(plugin_name: str):
             print("Can't connect to Internet, using cached file")
         except:
             r = {}
+
     json_exists = True
     try:
         r[plugin_name]
     except:
         json_exists = False
-    print(plugin_list)
     if plugin_name in plugin_list: 
         if plugin_name not in plugin_info.keys():
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
