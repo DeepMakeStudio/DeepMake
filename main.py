@@ -240,6 +240,7 @@ def get_plugin_info(plugin_name: str):
         r[plugin_name]
     except:
         json_exists = False
+        
     if plugin_name in plugin_list: 
         if plugin_name not in plugin_info.keys():
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
@@ -288,16 +289,24 @@ def set_plugin_config(plugin_name: str, config: dict):
             available_memory = memory_func() 
             # current_model_memory = retrieve_data(f"{plugin_name}_model_memory")["memory"]
             # initial_memory = available_memory + current_model_memory
-            port = port_mapping[plugin_name]
-            r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
+            # port = port_mapping[plugin_name]
+            # r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
+            job = huey_set_config(plugin_name, config, port_mapping)
             # after_memory = memory_func()
             # new_model_memory = initial_memory - after_memory
             # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
-            return r.json()
+            return {"job_id": job.id}
         else:
             raise HTTPException(status_code=404, detail="Plugin must be running to change config")
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
+    
+@huey.task()
+def huey_set_config(plugin_name: str, config: dict, port_mapping):
+    port = port_mapping[plugin_name]
+    r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
+    return r.json()
+            # after_memory = memory_func()
 
 @app.get("/plugins/start_plugin/{plugin_name}")
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
