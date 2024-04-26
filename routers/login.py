@@ -1,15 +1,23 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from auth_handler import auth_handler
 
+class LoginCredentials(BaseModel):
+    username: str
+    password: str
+
 router = APIRouter()
+
+# Initialize a global instance of auth_handler
+auth = auth_handler()
 
 @router.get("/login/status")
 async def get_login_status():
     return {"logged_in": auth.logged_in}
 
 @router.post("/login/login")
-async def login(username: str, password: str):
-    if auth.login_with_credentials(username, password):
+async def login(credentials: LoginCredentials):
+    if auth.login_with_credentials(credentials.username, credentials.password):
         return {"status": "success", "message": "Logged in successfully"}
     else:
         return {"status": "failed", "message": "Login failed"}
