@@ -14,6 +14,7 @@ router = APIRouter()
 @router.post("/install/{plugin_name}")
 async def install_plugin(plugin_name: str, plugin_dict: dict):
     url = plugin_dict[plugin_name]["url"]
+
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
     plugin_folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin")
     if ".git" in url:
@@ -21,19 +22,21 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
             p = subprocess.Popen(f"git clone {url} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
             p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = p.communicate()
+        print(out, err)
+        if "already exists" in err.decode("utf-8"):
+            print("Plugin already installed")
+        else:
+            print("Installed", plugin_name)
         # p = subprocess.Popen(f"unzip {plugin_name}.zip -d {plugin_folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         r = requests.get(url)
         z = zipfile.ZipFile(io.BytesIO(r.content))
         z.extractall(folder_path)
         # p = subprocess.Popen(f"tar -xf {plugin_name}.zip -C {plugin_folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    (out, err) = p.communicate()
-    print(out, err)
+    
     Plugin().on_install({})
-    if "already exists" in err.decode("utf-8"):
-        print("Plugin already installed")
-    else:
-        print("Installed", plugin_name)
+    
     return {"status": "success"}
 
 @router.get("/uninstall/{plugin_name}")
@@ -49,7 +52,9 @@ async def uninstall_plugin(plugin_name: str):
 
 @router.get("/update/{plugin_name}/{version}")
 def update_plugin(plugin_name: str, version: str):
-    plugin_url = plugin_info()[plugin_name]["url"]
+    plugin_dict = plugin_info()
+
+    plugin_url = plugin_dict[plugin_name]["url"]
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
 
     if ".git" in plugin_url or plugin_name == "DeepMake":
@@ -61,8 +66,9 @@ def update_plugin(plugin_name: str, version: str):
         p.wait()
         os.chdir(origin_folder)
     else:
-
-        new_version_url = "/".join(plugin_url.split("/")[:-1]) + f"{plugin_name}-{version}.zip"
+        zip_name = plugin_url.split("/")[-1].split("-")[0]
+        new_version_url = "/".join(plugin_url.split("/")[:-1]) + "/" + f"{zip_name}-{version}.zip"
+        print(new_version_url)
         r = requests.get(new_version_url)
         z = zipfile.ZipFile(io.BytesIO(r.content))
         z.extractall(folder_path)
