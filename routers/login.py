@@ -24,7 +24,7 @@ async def login(username: str, password: str):
     else:
         return {"status": "failed", "message": "Login failed"}
 
-@router.post("/logout")
+@router.get("/logout")
 async def logout():
 
     auth.logout()
