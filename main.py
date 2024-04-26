@@ -233,24 +233,27 @@ def get_plugin_info(plugin_name: str):
             r = retrieve_data("plugin_info")
             print("Can't connect to Internet, using cached file")
         except:
-            raise HTTPException(status_code=500, detail="Failed to retrieve plugin info, please connect to the Internet")
-    
+            r = {}
+    json_exists = True
     try:
         r[plugin_name]
     except:
-        raise HTTPException(status_code=404, detail="Plugin not found")
-    
+        json_exists = False
+    print(plugin_list)
     if plugin_name in plugin_list: 
         if plugin_name not in plugin_info.keys():
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
             # print(plugin_info[plugin_name]["plugin"]["memory"])
-            initial_value = int(r[plugin_name]["vram"].split(" ")[0])
-            mult = 1
-            if "GB" in r[plugin_name]["vram"]:
-                mult = 1024
-            initial_value *= mult
+            if json_exists:
+                initial_value = int(r[plugin_name]["vram"].split(" ")[0])
+                mult = 1
+                if "GB" in r[plugin_name]["vram"]:
+                    mult = 1024
+                initial_value *= mult
+            else:
+                initial_value = 1000
             store_data(f"{plugin_name}_memory", {"memory": [initial_value]})
             # store_data(f"{plugin_name}_model_memory", {"memory": plugin_info[plugin_name]["plugin"]["model_memory"]})
             store_data(f"{plugin_name}_memory_mean", {"memory": initial_value})
