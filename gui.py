@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QPushButton, QLineEdit, QTextEdit, QComboBox, QSlider, QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox, QDialog, QScrollArea, QDialogButtonBox, QLabel, QFileDialog, QTableWidget, QHeaderView, QTableWidgetItem, QApplication, QProgressBar, QComboBox, QHBoxLayout, QListWidget, QHeaderView, QTableWidget, QVBoxLayout, QTableWidgetItem, QDialog, QScrollArea, QDialogButtonBox, QSlider, QSizePolicy, QCheckBox, QLabel, QLineEdit, QFileDialog
+from PySide6.QtWidgets import QWidget, QPushButton, QLineEdit, QTextEdit, QComboBox, QSlider, QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox, QDialog, QScrollArea, QDialogButtonBox, QLabel, QFileDialog, QTableWidget, QHeaderView, QTableWidgetItem, QApplication, QProgressBar, QComboBox, QHBoxLayout, QListWidget, QHeaderView, QTableWidget, QVBoxLayout, QTableWidgetItem, QDialog, QScrollArea, QDialogButtonBox, QSlider, QSizePolicy, QCheckBox, QLabel, QLineEdit, QFileDialog, QMessageBox
 from PySide6.QtCore import Qt, Signal, QObject, QThread
 from PySide6.QtGui import QIcon, QPixmap
 import os
@@ -755,7 +755,7 @@ class ReportIssueDialog(QWidget):
 class LoginWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self.backend_url = "http://localhost:8000"
+        self.backend_url = "http://localhost:8000/login"
         self.initUI()
         self.check_login()
 
@@ -770,15 +770,15 @@ class LoginWidget(QWidget):
         emailLayout = QHBoxLayout()
         emailLabel = QLabel('Email')
         self.emailInput = QLineEdit()
-        self.emailInput.setPlaceholderText('Textbox for Email')
+        self.emailInput.setPlaceholderText('Enter your Email')
         emailLayout.addWidget(emailLabel)
         emailLayout.addWidget(self.emailInput)
 
         passwordLayout = QHBoxLayout()
         passwordLabel = QLabel('Password')
         self.passwordInput = QLineEdit()
-        self.passwordInput.setPlaceholderText('Textbox for Password')
-        self.passwordInput.setEchoMode(QLineEdit.EchoMode.Password)
+        self.passwordInput.setPlaceholderText('Enter your Password')
+        self.passwordInput.setEchoMode(QLineEdit.Password)
         passwordLayout.addWidget(passwordLabel)
         passwordLayout.addWidget(self.passwordInput)
 
@@ -808,37 +808,37 @@ class LoginWidget(QWidget):
 
     def check_login(self):
         try:
-            response = requests.get(f"{self.backend_url}/login/status")
-            print(f"Checking login status: {response.json()}")
-            if response.status_code == 200 and response.json()['logged_in']:
-                user_info = response.json()
-                self.loggedInLabel.setText(f'Logged in as {user_info.get("username", "Unknown")}')
+            response = requests.get(f"{self.backend_url}/status")
+            if response.status_code == 200 and response.json().get('logged_in', False):
+                self.loggedInLabel.setText(f'Logged in as {response.json().get("username", "Unknown")}')
                 self.toggleLoginState(True)
         except requests.exceptions.RequestException as e:
-            print(f"Failed to check login status: {e}")
+            QMessageBox.critical(self, "Connection Error", f"Failed to check login status: {str(e)}")
 
     def login(self):
-        username = self.emailInput.text()
+        email = self.emailInput.text()
         password = self.passwordInput.text()
         try:
-            url = f"{self.backend_url}/login/login?username={username}&password={password}"
-            response = requests.post(url)
-            print(f"Login response: {response.json()}")
+            response = requests.post(f"{self.backend_url}/login", json={"username": email, "password": password})
             if response.status_code == 200:
-                self.loggedInLabel.setText(f'Logged in as {username}')
-                self.toggleLoginState(True)
+                response_data = response.json()
+                if response_data['status'] == 'success':
+                    self.loggedInLabel.setText(f'Logged in as {response_data.get("username", email)}')
+                    self.toggleLoginState(True)
+                else:
+                    QMessageBox.warning(self, "Login Failed", response_data.get("message", "Login failed. Please check your credentials."))
             else:
-                print(response.json().get("message", "Login failed"))
+                QMessageBox.warning(self, "Login Failed", "Login failed. Please check your credentials.")
         except requests.exceptions.RequestException as e:
-            print(f"Login failed: {e}")
+            QMessageBox.critical(self, "Connection Error", f"Login failed: {str(e)}")
 
     def logout(self):
         try:
-            response = requests.post(f"{self.backend_url}/login/logout")
+            response = requests.get(f"{self.backend_url}/logout")
             if response.status_code == 200:
                 self.toggleLoginState(False)
         except requests.exceptions.RequestException as e:
-            print(f"Logout failed: {e}")
+            QMessageBox.critical(self, "Connection Error", f"Logout failed: {str(e)}")
 
     def toggleLoginState(self, loggedIn):
         self.loginSection.setEnabled(not loggedIn)
