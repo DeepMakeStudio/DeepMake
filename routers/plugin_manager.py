@@ -63,7 +63,7 @@ def update_plugin(plugin_name: str, version: str):
         if plugin_name != "DeepMake":
             os.chdir(os.path.join(origin_folder, "plugin", plugin_name))
             # print(p.communicate())
-        print(f"git checkout {version}", os.getcwd()
+        print(f"git checkout {version}", os.getcwd())
         if sys.platform != "win32":
             p = subprocess.Popen(f"git checkout {version} ".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
