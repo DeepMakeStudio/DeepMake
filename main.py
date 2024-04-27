@@ -667,8 +667,8 @@ def retrieve_data(key: str):
     cursor.execute("SELECT value FROM key_value_store WHERE key = ?", (key,))
     row = cursor.fetchone()
     conn.close()
-    data = json.loads(row[0])
     if row:
+        data = json.loads(row[0])
         return data
     raise HTTPException(status_code=404, detail="Key not found")
 
