@@ -264,7 +264,7 @@ def get_plugin_info(plugin_name: str):
             try:
                 plugin_info[plugin_name]["plugin"]["license"] = r[plugin_name]["license"]
             except:
-                plugin_info[plugin_name]["plugin"]["license"] = "Not Found"
+                plugin_info[plugin_name]["plugin"]["license"] = 0
         return plugin_info[plugin_name]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
