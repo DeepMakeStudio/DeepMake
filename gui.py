@@ -390,7 +390,6 @@ class PluginManagerGUI(QWidget):
         if plugin_name not in os.listdir(fastapi_launcher_path):
             print("Plugin not installed")
             return
-        
         dlg = CustomDialog(plugin_name, self.plugin_dict[plugin_name])
         if dlg.exec():
             print("Uninstalling", plugin_name)
@@ -656,7 +655,7 @@ class Updater(QWidget):
         avail_item.setFlags(Qt.ItemIsEnabled)
 
         self.tableWidget.setItem(0, 0, cur_ver_item)
-        self.tableWidget.setItem(0, 1,)
+        self.tableWidget.setItem(0, 1, avail_item)
         dropdown = QComboBox()
         self.tag_list = self.version_management()
         self.tag_list.reverse()
