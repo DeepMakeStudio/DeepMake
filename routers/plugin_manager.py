@@ -79,7 +79,7 @@ async def uninstall_plugin(plugin_name: str):
     # args["plugin_name"] = plugin_name
     # dummy_plugin = Plugin(Namespace(**args))
     # dummy_plugin._on_uninstall(args.config["model_urls"])
-    Plugin()._on_uninstall()    
+    Plugin().on_uninstall()    
     return {"status": "success"}
 
 @router.get("/update/{plugin_name}/{version}")
