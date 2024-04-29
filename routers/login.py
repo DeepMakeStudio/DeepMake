@@ -1,6 +1,11 @@
 from fastapi import APIRouter, FastAPI, Depends, Request, Header
 import requests
 from auth_handler import auth_handler as auth
+from pydantic import BaseModel
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 router = APIRouter()
 client = requests.Session()
@@ -17,9 +22,8 @@ async def get_login_status():
     return {"logged_in": auth.logged_in}
 
 @router.post("/login")
-async def login(username: str, password: str):
-
-    if auth.login_with_credentials(username, password):
+async def login(request: LoginRequest):
+    if auth.login_with_credentials(request.username, request.password):
         return {"status": "success", "message": "Logged in successfully"}
     else:
         return {"status": "failed", "message": "Login failed"}
