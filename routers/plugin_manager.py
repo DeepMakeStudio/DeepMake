@@ -30,6 +30,7 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
             print("Installed", plugin_name)
         # p = subprocess.Popen(f"unzip {plugin_name}.zip -d {plugin_folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
+        folder_path = "plugin"
         r = requests.get(url)
         z = zipfile.ZipFile(io.BytesIO(r.content))
         z.extractall(folder_path)
