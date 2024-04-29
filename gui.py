@@ -239,11 +239,7 @@ class Worker(QObject):
         """Long-running task."""
         r = client.post(f"http://127.0.0.1:8000/plugin_manager/install/{self.plugin_name}", json = self.plugin_dict)
 
-        if sys.platform != "win32":
-            p = subprocess.Popen(self.popen_string.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        else:   
-            p = subprocess.Popen(self.popen_string, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p.wait()
+        
         self.finished.emit()
 
 class UninstallWorker(QObject):

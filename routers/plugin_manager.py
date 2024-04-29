@@ -8,13 +8,16 @@ from auth_handler import auth_handler as auth
 import zipfile
 from db_utils import retrieve_data 
 from plugin import Plugin
+from argparse import Namespace
+import time
 
 router = APIRouter()
+client = requests.Session()
 
 @router.post("/install/{plugin_name}")
 async def install_plugin(plugin_name: str, plugin_dict: dict):
     url = plugin_dict[plugin_name]["url"]
-
+    print(url)
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
     plugin_folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin")
     if ".git" in url:
@@ -33,21 +36,45 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
         r = requests.get(url)
         z = zipfile.ZipFile(io.BytesIO(r.content))
         z.extractall(folder_path)
-        # p = subprocess.Popen(f"tar -xf {plugin_name}.zip -C {plugin_folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     
+    if sys.platform != "win32":
+        if sys.platform == "darwin":
+            popen_string = f"conda env create -f {folder_path}/environment_mac.yml"
+        else:
+            popen_string = f"conda env create -f {folder_path}/environment.yml"
+        p = subprocess.Popen(popen_string.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        p = subprocess.Popen(f"conda env create -f {folder_path}/environment.yml", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p.wait()
+    # time.sleep(3)
+    #     # p = subprocess.Popen(f"tar -xf {plugin_name}.zip -C {plugin_folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # print("request start")
+    # r = client.get(f"http://127.0.0.1:8000/plugins/get_info/{plugin_name}")
+    # print("request end")
+    # args = r.json()
+    # args["plugin_name"] = plugin_name
+    # dummy_plugin = Plugin(Namespace(**args))
+    # dummy_plugin.on_install(args.config["model_urls"])
     Plugin().on_install({})
     
     return {"status": "success"}
 
 @router.get("/uninstall/{plugin_name}")
 async def uninstall_plugin(plugin_name: str):
+
+    # r = client.get(f"http://127.0.0.1:8000/plugins/get_info/{plugin_name}")
+
     folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
     print(folder_path)
     if sys.platform != "win32":
         p = subprocess.Popen(f"rm -rf {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         p = subprocess.Popen(f"rmdir /s /q {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    Plugin().on_uninstall()
+    # args = r.json()
+    # args["plugin_name"] = plugin_name
+    # dummy_plugin = Plugin(Namespace(**args))
+    # dummy_plugin._on_uninstall(args.config["model_urls"])
+    Plugin()._on_uninstall()    
     return {"status": "success"}
 
 @router.get("/update/{plugin_name}/{version}")
@@ -89,3 +116,4 @@ def plugin_info():
         print("Error retrieving plugin info, using cached version")
         plugin_dict = retrieve_data("plugin_info")
     return plugin_dict
+
