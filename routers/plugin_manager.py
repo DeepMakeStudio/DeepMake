@@ -17,7 +17,7 @@ client = requests.Session()
 @router.post("/install/{plugin_name}")
 async def install_plugin(plugin_name: str, plugin_dict: dict):
     url = plugin_dict[plugin_name]["url"]
-    print("CURRENT:", os.getcwd())
+    cur_folder = os.getcwd()
     folder_path = os.path.join("plugin", plugin_name)
     plugin_folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin")
     if ".git" in url:
@@ -31,6 +31,11 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
             print("Plugin already installed")
         else:
             print("Installed", plugin_name)
+        if sys.platform != "win32":
+            p = subprocess.Popen(f"git submodule update --init".split(), cwd=folder_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            p = subprocess.Popen(f"git submodule update --init", cwd=folder_path, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        os.chdir(cur_folder)
         # p = subprocess.Popen(f"unzip {plugin_name}.zip -d {plugin_folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         folder_path = "plugin"
