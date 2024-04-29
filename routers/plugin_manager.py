@@ -14,8 +14,8 @@ router = APIRouter()
 @router.post("/install/{plugin_name}")
 async def install_plugin(plugin_name: str, plugin_dict: dict):
     url = plugin_dict[plugin_name]["url"]
-
-    folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
+    print("CURRENT:", os.getcwd())
+    folder_path = os.path.join("plugin", plugin_name)
     plugin_folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin")
     if ".git" in url:
         if sys.platform != "win32":
@@ -41,7 +41,9 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
 
 @router.get("/uninstall/{plugin_name}")
 async def uninstall_plugin(plugin_name: str):
-    folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
+    print("CURRENT:", os.getcwd())
+
+    folder_path = os.path.join("plugin", plugin_name)
     print(folder_path)
     if sys.platform != "win32":
         p = subprocess.Popen(f"rm -rf {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -56,7 +58,7 @@ def update_plugin(plugin_name: str, version: str):
         plugin_dict = plugin_info()
 
         plugin_url = plugin_dict[plugin_name]["url"]
-        folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin", plugin_name)
+        folder_path = os.path.join("plugin", plugin_name)
 
     if plugin_name == "DeepMake" or ".git" in plugin_url:
         origin_folder = os.path.dirname(os.path.dirname(__file__))
