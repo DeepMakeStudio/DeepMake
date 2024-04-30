@@ -41,9 +41,13 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
         # p = subprocess.Popen(f"unzip {plugin_name}.zip -d {plugin_folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         folder_path = "plugin"
-        r = requests.get(url)
-        z = zipfile.ZipFile(io.BytesIO(r.content))
-        z.extractall(folder_path)
+        r = auth.get_url(url)
+        try:
+            z = zipfile.ZipFile(io.BytesIO(r))
+            z.extractall(folder_path)
+        except zipfile.BadZipFile:
+            print("Bad Zip File")
+            return {"status": "failure", "message": "Bad Zip File"}
     
     if sys.platform != "win32":
         if sys.platform == "darwin":
@@ -110,7 +114,7 @@ def update_plugin(plugin_name: str, version: str):
         print(new_version_url)
         r = auth.get_url(new_version_url)
         try:
-            z = zipfile.ZipFile(io.BytesIO(r.content))
+            z = zipfile.ZipFile(io.BytesIO(r))
             z.extractall(folder_path)
         except zipfile.BadZipFile:
             print("Bad Zip File")
