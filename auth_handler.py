@@ -95,12 +95,15 @@ class AuthHandler():
         headers = {'Authorization': f'Bearer {self.JWT}', 'Cookie': f'nf_jwt={self.JWT}'}
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
-            if response.encoding:
+            if response.headers['Content-Type'] == 'application/json':
                 return response.json()
-            else:
+            elif response.headers['Content-Type'] == 'application/zip':
                 return response.content
+            elif response.headers['Content-Type'] == 'text/html':
+                return response.text
         else:
             return False
+
 
     def check_roles(self):
         if not self.logged_in:
