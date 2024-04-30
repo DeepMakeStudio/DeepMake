@@ -6,6 +6,11 @@ import huey
 import os
 import sys
 import numpy as np
+from io import BytesIO
+from PIL import Image
+from tqdm import tqdm
+import shutil
+import threading
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -18,12 +23,24 @@ if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
 
 storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
+print(storage_folder)
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
     if img_data == huey.constants.EmptyData:
+        # print("No image found for id", img_id)
         raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
     return img_data
+
+def fetch_pil_image(img_id):
+    img_data = fetch_image(img_id)
+    return Image.open(BytesIO(img_data))
+
+def store_pil_image(img, img_id=None):
+    output = BytesIO()
+    img.save(output, format="PNG")
+    img_data = output.getvalue()
+    return store_image(img_data, img_id)
 
 def store_image(img_data, img_id=None):
     if img_id is None:
@@ -34,25 +51,48 @@ def store_image(img_data, img_id=None):
     return img_id
 
 def store_multiple_images(img_data):
-    shape = np.array(img_data).shape
-    print(shape, np.array(shape).dtype)
-    img_data = np.array(img_data).tobytes()
-    img_id = str(uuid.uuid4())
-    shape_id = img_id + "_shape"
-    storage.put_data(img_id,img_data)
-    storage.put_data(shape_id, np.array(shape).tobytes())
-    return img_id
+    video_id = str(uuid.uuid4())
+
+    img_id_list = [store_image(img_data[i], video_id + f"_{i}") for i in range(len(img_data))]
+    bytes_list = bytes(";".join(img_id_list).encode("utf-8"))
+    storage.put_data(video_id, bytes_list)
+    return video_id
+
+def store_multiple(data_list, func, img_ids=None):
+    list_id = str(uuid.uuid4())
+    if img_ids is None:
+        img_ids = [func(img) for img in data_list]
+    elif len(data_list) == len(img_ids):
+        img_ids = [func(img, img_id) for img, img_id in zip(data_list, img_ids)]
+    elif type(img_ids) == str:
+        img_ids = [func(img, img_ids + str(i)) for i, img in enumerate(data_list)]
+    bytes_list = bytes(";".join(img_ids).encode("utf-8"))
+    storage.put_data(list_id, bytes_list)
+    return list_id
+
+def fetch_multiple(func, id_list):
+    return [func(img_id) for img_id in id_list]
 
 class Plugin():
     """
     Generic plugin class
     """
 
-    def __init__(self, arguments):
+    def __init__(self, arguments={}):
         self.plugin_name = "default"
-        self.plugin = arguments.plugin
-        self.config = arguments.config
-        self.endpoints = arguments.endpoints
+        if arguments == {}:
+            self.plugin = {}
+            self.config = {}
+            self.endpoints = {}
+        else:
+            self.plugin = arguments.plugin
+            self.config = arguments.config
+            self.endpoints = arguments.endpoints
+            
+
+        # Create a plugin-specific storage path
+        self.plugin_storage_path = os.path.join(storage_folder, self.plugin_name)
+        os.makedirs(self.plugin_storage_path, exist_ok=True)
 
     def plugin_info(self):
         """ int: The number of samples to take from the input video/images """
@@ -67,7 +107,78 @@ class Plugin():
             self.set_model()
             # if response["status"] == "Failed":
             #     return response
-        return self.config 
+        return self.config
+
+    def progress_callback(self, progress, stage):
+        if progress >= 0:
+            print(f"{stage}: {progress*100}% complete")
+        else:
+            print(f"{stage}: Progress not available")
+
+
+    def download_model(self, model_url, save_path, progress_callback=None):
+        """Download a model with a progress bar and report progress in 5% increments."""
+        resp = requests.get(model_url, stream=True)
+        total_size = int(resp.headers.get('content-length', 0))
+        downloaded_size = 0
+        last_reported_progress = -0.05  # Initialize to -5% so the first callback happens at 0%
+
+        with open(save_path, 'wb') as file:
+            for data in resp.iter_content(chunk_size=1024):
+                file.write(data)
+                downloaded_size += len(data)
+                progress = downloaded_size / total_size
+                if progress >= last_reported_progress + 0.05:  # Check if we've advanced by another 5%
+                    last_reported_progress = progress
+                    if progress_callback:
+                        progress_callback(progress, f"Downloading {os.path.basename(save_path)}")
+
+        if progress_callback:
+            progress_callback(1.0, f"Downloading {os.path.basename(save_path)} complete")
+
+    def on_install(self, model_urls, progress_callback=None):
+        """Install necessary models for the plugin and report detailed progress in 5% increments."""
+        try:
+            total_models = len(model_urls)
+            current_model_index = 0
+
+            for model_name, model_url in model_urls.items():
+                model_path = os.path.join(self.plugin_storage_path, model_name)
+                if not os.path.exists(model_path):
+                    def model_progress_callback(local_progress, stage):
+                        # Calculate the overall progress based on the current model index and local progress
+                        overall_progress = ((current_model_index + local_progress) / total_models)
+                        # Convert overall progress to percentage
+                        progress_percentage = round(overall_progress * 100)
+                        self.notify_main_system_of_installation_async(progress_percentage, stage)
+
+                    print(f"Downloading {model_name}...")
+                    self.download_model(model_url, model_path, model_progress_callback)
+                else:
+                    print(f"{model_name} already exists.")
+
+                # After each model is processed (downloaded or skipped), increment the current_model_index
+                current_model_index += 1
+                # Notify for the completion of this model's installation
+                self.notify_main_system_of_installation_async(round((current_model_index / total_models) * 100), f"{model_name} installation complete")
+
+            # After all models are processed, notify completion
+            self.notify_main_system_of_installation_async(100, "Installation complete")
+        except Exception as e:
+            self.notify_main_system_of_installation_async(-1, f"Installation failed: {str(e)}")
+            print(f"Error installing resources for {self.plugin_name}: {str(e)}")
+
+    def on_uninstall(self, progress_callback=None):
+        """Clean up resources used by the plugin."""
+        try:
+            shutil.rmtree(self.plugin_storage_path)
+            if progress_callback:
+                progress_callback(1.0, "Uninstallation complete")
+            print(f"Removed all resources for {self.plugin_name}.")
+        except Exception as e:
+            if progress_callback:
+                progress_callback(-1, f"Uninstallation failed: {str(e)}")
+            print(f"Error removing resources for {self.plugin_name}: {str(e)}")
     
     def notify_main_system_of_startup(self, status: str):
         callback_url = f"http://localhost:8000/plugin_callback/{self.plugin_name}/{status}"
@@ -80,3 +191,27 @@ class Plugin():
                 print("Callback failed. Check the main system.")
         except:
             print("Failed to notify the main system. Ensure it's running.")
+
+    def notify_main_system_of_installation(self, progress, stage):
+        # Ensure progress is rounded to the nearest whole number for reporting
+        print(progress, stage)
+        #progress_percentage = round(progress * 100)
+        callback_url = f"http://localhost:8000/plugin_install_callback/{self.plugin_name}/{progress}/{stage.replace(' ', '%20')}"
+        try:
+            response = requests.post(callback_url)
+            print(f"Installation progress update to main system: {progress}% complete. Current stage: {stage}")
+        except Exception as e:
+            print("Failed to notify the main system of installation progress:", e)
+
+    def notify_main_system_of_uninstallation(self, progress, stage):
+        callback_url = f"http://localhost:8000/plugin_uninstall_callback/{self.plugin_name}/{progress}/{stage}"
+        try:
+            response = requests.post(callback_url)
+            print("Uninstallation progress update to main system:", response.json())
+        except Exception as e:
+            print("Failed to notify the main system of uninstallation progress:", e)
+        
+    def notify_main_system_of_installation_async(self, progress, stage):
+        threading.Thread(target=self.notify_main_system_of_installation, args=(progress, stage)).start()
+
+
