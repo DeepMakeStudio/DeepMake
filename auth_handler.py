@@ -94,8 +94,11 @@ class AuthHandler():
         self.validate_jwt()
         headers = {'Authorization': f'Bearer {self.JWT}', 'Cookie': f'nf_jwt={self.JWT}'}
         response = requests.get(url, headers=headers)
-        if response.status_code == 200:         
-            return response.json()
+        if response.status_code == 200:
+            if response.encoding:
+                return response.json()
+            else:
+                return response.content
         else:
             return False
 

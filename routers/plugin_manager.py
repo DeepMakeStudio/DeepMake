@@ -16,6 +16,8 @@ client = requests.Session()
 
 @router.post("/install/{plugin_name}")
 async def install_plugin(plugin_name: str, plugin_dict: dict):
+    if plugin_dict == {}:
+        plugin_dict = plugin_info()
     url = plugin_dict[plugin_name]["url"]
     cur_folder = os.getcwd()
     folder_path = os.path.join("plugin", plugin_name)
@@ -106,9 +108,13 @@ def update_plugin(plugin_name: str, version: str):
         zip_name = plugin_url.split("/")[-1].split("-")[0]
         new_version_url = "/".join(plugin_url.split("/")[:-1]) + "/" + f"{zip_name}-{version}.zip"
         print(new_version_url)
-        r = requests.get(new_version_url)
-        z = zipfile.ZipFile(io.BytesIO(r.content))
-        z.extractall(folder_path)
+        r = auth.get_url(new_version_url)
+        try:
+            z = zipfile.ZipFile(io.BytesIO(r.content))
+            z.extractall(folder_path)
+        except zipfile.BadZipFile:
+            print("Bad Zip File")
+            return {"status": "failure", "message": "Bad Zip File"}
 
     return {"status": "success", "version": f"{version}"}
 
