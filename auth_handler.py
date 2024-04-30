@@ -118,7 +118,7 @@ class AuthHandler():
             try:
                 # Set the range header to request a subset of the file
                 headers = {'Range': f'bytes={start}-'}
-                response = requests.get(url, headers=headers, stream=True, headers=headers)
+                response = requests.get(url, headers=headers, stream=True)
                 response.raise_for_status()  # Check for request errors
 
                 # Read the content in chunks
