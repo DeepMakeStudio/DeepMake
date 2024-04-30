@@ -235,23 +235,33 @@ class Worker(QObject):
     plugin_name = ""
     finished = Signal()
     plugin_dict = {}
+    cur_string = Signal(str)
+    status = True
     # progress = Signal(int)
     def run(self):
         "Actually installs the files"
-        r = client.post(f"http://127.0.0.1:8000/plugin_manager/install/{self.plugin_name}", json = self.plugin_dict)
+        r = client.get(f"http://127.0.0.1:8000/plugin_manager/install/{self.plugin_name}")
         time.sleep(3)
-
-        "Test run of environment and plugin including running on_install function and loading weights"
+        r = client.get(f"http://127.0.0.1:8000/plugins/reload")
+        
+        "Test run of environment and plugin including downloading and loading weights"
         r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{self.plugin_name}")
         result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
         while result[self.plugin_name]["state"] != "RUNNING":
             time.sleep(10)
             result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
         r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{self.plugin_name}")
+        self.status = False
+        self.finished.emit()   
 
-
-        
-        self.finished.emit()
+    # def changeText(self):
+    #     text = "Installing"
+    #     while True:
+    #         time.sleep(1)
+    #         text += "."
+    #         if text == "Installing....":
+    #             text = "Installing."
+    #         self.cur_string.emit(text)
 
 class UninstallWorker(QObject):
     plugin_name = ""
@@ -304,6 +314,8 @@ class PluginManagerGUI(QWidget):
         self.setLayout(self.layout) 
         self.threads = [QThread() for i in range(len(self.plugin_dict.keys()))]
         self.workers = [Worker() for i in range(len(self.plugin_dict.keys()))]
+        # self.install_threads = [QThread() for i in range(len(self.plugin_dict.keys()))]
+        # self.install_workers = [Worker() for i in range(len(self.plugin_dict.keys()))]
     
         
 
@@ -467,10 +479,13 @@ class PluginManagerGUI(QWidget):
         # self.thread = QThread()
         worker = self.workers[row_number]
         thread = self.threads[row_number]
+        # installing_worker = self.install_workers[row_number]
+        # installing_thread = self.install_threads[row_number]
 
         worker.popen_string = popen_string
         worker.plugin_name = plugin_name
         worker.plugin_dict = self.plugin_dict
+
 
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
@@ -478,7 +493,16 @@ class PluginManagerGUI(QWidget):
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
 
+        # installing_worker.moveToThread(installing_thread)
+        # installing_thread.started.connect(installing_worker.changeText)
+        # installing_worker.cur_string.connect(lambda text: self.tableWidget.item(row_number, 3).setText(text))
+        # worker.finished.connect(installing_thread.quit)
+        # worker.finished.connect(installing_worker.finished)
+        # installing_worker.finished.connect(installing_worker.deleteLater)
+        # installing_thread.finished.connect(installing_thread.deleteLater)
+
         thread.start()
+        # installing_thread.start()
         thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
         thread.finished.connect(lambda: self.Installed(plugin_name))
     
