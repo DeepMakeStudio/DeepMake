@@ -14,10 +14,9 @@ import time
 router = APIRouter()
 client = requests.Session()
 
-@router.post("/install/{plugin_name}")
-async def install_plugin(plugin_name: str, plugin_dict: dict):
-    if plugin_dict == {}:
-        plugin_dict = plugin_info()
+@router.get("/install/{plugin_name}")
+async def install_plugin(plugin_name: str):
+    plugin_dict = plugin_info()
     url = plugin_dict[plugin_name]["url"]
     cur_folder = os.getcwd()
     folder_path = os.path.join("plugin", plugin_name)
@@ -33,21 +32,22 @@ async def install_plugin(plugin_name: str, plugin_dict: dict):
             print("Plugin already installed")
         else:
             print("Installed", plugin_name)
-        if sys.platform != "win32":
-            p = subprocess.Popen(f"git submodule update --init".split(), cwd=folder_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        else:
-            p = subprocess.Popen(f"git submodule update --init", cwd=folder_path, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        os.chdir(cur_folder)
+        
         # p = subprocess.Popen(f"unzip {plugin_name}.zip -d {plugin_folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
-        folder_path = "plugin"
+        temp_folder_path = "plugin"
         r = auth.get_url(url)
         try:
             z = zipfile.ZipFile(io.BytesIO(r))
-            z.extractall(folder_path)
+            z.extractall(temp_folder_path)
         except zipfile.BadZipFile:
             print("Bad Zip File")
             return {"status": "failure", "message": "Bad Zip File"}
+    if sys.platform != "win32":
+        p = subprocess.Popen(f"git submodule update --init".split(), cwd=folder_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    else:
+        p = subprocess.Popen(f"git submodule update --init", cwd=folder_path, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    os.chdir(cur_folder)
     
     if sys.platform != "win32":
         if sys.platform == "darwin":
