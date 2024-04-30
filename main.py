@@ -164,6 +164,15 @@ def load_plugins():
 
     process_ids["huey"] = pid
 
+def reload_plugin_list():
+    for folder in os.listdir(PLUGINS_DIRECTORY):
+        if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
+            if folder in plugin_list:
+                continue
+            if "plugin.py" not in os.listdir(os.path.join(PLUGINS_DIRECTORY, folder)):
+                continue
+            plugin_list.append(folder)
+
 async def serialize_image(image):
     image= base64.b64encode(await image.read())
     img_data = image.decode()
@@ -206,7 +215,7 @@ async def redirect_docs():
 
 @app.get("/plugins/reload")
 async def reload_plugins():
-    load_plugins()
+    reload_plugin_list()
     return {"status": "success"}
 
 @app.get("/plugins/get_list")
