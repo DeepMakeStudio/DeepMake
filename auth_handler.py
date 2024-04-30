@@ -93,7 +93,12 @@ class AuthHandler():
     def get_url(self, url):
         self.validate_jwt()
         headers = {'Authorization': f'Bearer {self.JWT}', 'Cookie': f'nf_jwt={self.JWT}'}
-        response = requests.get(url, headers=headers)
+        response = None
+        if url.endswith('.zip'):
+            return self.large_download(url)
+        else:
+            response = requests.get(url, headers=headers)
+            
         if response.status_code == 200:
             if response.headers['Content-Type'] == 'application/json':
                 return response.json()
@@ -104,6 +109,38 @@ class AuthHandler():
         else:
             return False
 
+    def large_download(self, url):
+        start = 0
+        data = bytearray()
+        headers = {'Authorization': f'Bearer {self.JWT}', 'Cookie': f'nf_jwt={self.JWT}'}
+
+        while True:
+            try:
+                # Set the range header to request a subset of the file
+                headers = {'Range': f'bytes={start}-'}
+                response = requests.get(url, headers=headers, stream=True, headers=headers)
+                response.raise_for_status()  # Check for request errors
+
+                # Read the content in chunks
+                for chunk in response.iter_content(chunk_size=1024):  # 1KB chunks
+                    if chunk:
+                        data.extend(chunk)
+                        start += len(chunk)
+
+                # If the loop completes without errors, break out of the while loop
+                break
+
+            except requests.exceptions.ChunkedEncodingError:
+                print("Chunked Encoding Error occurred, retrying...")
+                continue  # Continue the loop and try to reconnect from where it left off
+
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                break
+
+        return data
+
+            
 
     def check_roles(self):
         if not self.logged_in:
