@@ -22,3 +22,4 @@ dependencies:
       - uvicorn
       - psutil
       - pyjwt
+      - pyside6
