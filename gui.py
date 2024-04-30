@@ -7,6 +7,7 @@ import sys
 import requests
 import subprocess
 import webbrowser
+import time
 
 client = requests.Session()
 
@@ -236,8 +237,18 @@ class Worker(QObject):
     plugin_dict = {}
     # progress = Signal(int)
     def run(self):
-        """Long-running task."""
+        "Actually installs the files"
         r = client.post(f"http://127.0.0.1:8000/plugin_manager/install/{self.plugin_name}", json = self.plugin_dict)
+        time.sleep(3)
+
+        "Test run of environment and plugin including running on_install function and loading weights"
+        r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{self.plugin_name}")
+        result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+        while result[self.plugin_name]["state"] != "RUNNING":
+            time.sleep(10)
+            result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+        r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{self.plugin_name}")
+
 
         
         self.finished.emit()
@@ -246,6 +257,17 @@ class UninstallWorker(QObject):
     plugin_name = ""
     finished = Signal()
     def run(self):
+
+        # Potential on_uninstall 
+        # r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{self.plugin_name}")
+        # result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+        # while result[self.plugin_name]["state"] != "RUNNING":
+        #     time.sleep(10)
+        #     result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+        # r = client.get(f"http://127.0.0.1:8000/plugins/uninstall/{self.plugin_name}")
+        # r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{self.plugin_name}")
+
+        # Removes files after uninstall process
         r = client.get(f"http://127.0.0.1:8000/plugin_manager/uninstall/{self.plugin_name}")
 
         self.finished.emit()
