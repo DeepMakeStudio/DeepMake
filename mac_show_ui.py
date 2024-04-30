@@ -38,7 +38,9 @@ window.show()
 center_screen(window)
 
 try:
-    sys.exit(app.exec())
+    app.exec()
+    sys.exit(0)
 except:
     pass
+
 
