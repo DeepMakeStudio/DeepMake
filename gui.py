@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QWidget, QPushButton, QLineEdit, QTextEdit, QComboBox, QSlider, QSizePolicy, QHBoxLayout, QVBoxLayout, QCheckBox, QDialog, QScrollArea, QDialogButtonBox, QLabel, QFileDialog, QTableWidget, QHeaderView, QTableWidgetItem, QApplication, QProgressBar, QComboBox, QHBoxLayout, QListWidget, QHeaderView, QTableWidget, QVBoxLayout, QTableWidgetItem, QDialog, QScrollArea, QDialogButtonBox, QSlider, QSizePolicy, QCheckBox, QLabel, QLineEdit, QFileDialog, QMessageBox
-from PySide6.QtCore import Qt, Signal, QObject, QThread
+from PySide6.QtCore import Qt, Signal, QObject, QThread, QTimer, QEventLoop
 from PySide6.QtGui import QIcon, QPixmap
 import os
 fastapi_launcher_path = os.path.join(os.path.dirname(__file__), "plugin")
@@ -57,7 +57,6 @@ class ConfigGUI(QWidget):
     def guiFromConfig(self, config):
         for key in config:
             value = config[key]
-            print(type(value))  
             label = QLabel(key)
             self.layout.addWidget(label)
             
@@ -73,7 +72,6 @@ class ConfigGUI(QWidget):
                 checkbox.stateChanged.connect(lambda state, key = key: self.setBool(key, state))
                 self.layout.addWidget(checkbox)
             elif isinstance(value, int):
-                print(key, value)
                 h_layout = QHBoxLayout()
                 number_label = QLabel(f"{value}")
 
@@ -171,13 +169,11 @@ class ConfigGUI(QWidget):
         label.setText(f"{value}")
     def editConfig(self, key, text):
         self.output_config[key] = text
-        print(self.output_config)
     def setBool(self, key, state):
         if state == 2:
             self.output_config[key] = True
         else:
             self.output_config[key] = False
-        print(self.output_config)
     
     def thread_process(self):
 
@@ -204,64 +200,51 @@ class ConfigGUI(QWidget):
         self.submit_button.setText("Submitting...")
         self.thread_process()
 
-# class FileExplorer(QWidget):
-
-#     def __init__(self):
-#         super().__init__()
-#         self.title = 'File Explorer'
-#         self.left = 10
-#         self.top = 10
-#         self.width = 640
-#         self.height = 480
-#         self.initUI()
-
-#     def initUI(self):
-#         self.setWindowTitle(self.title)
-#         self.setGeometry(self.left, self.top, self.width, self.height)
-#         # self.openFileNameDialog()
-#         self.show()
-
-    # def openFileNameDialog(self):
-    #     # options = QFileDialog.options()
-    #     options = QFileDialog.DontUseNativeDialog
-    #     fileName, _ = QFileDialog.getOpenFileName(self,"Choose File", "","csv (*.csv)", 
-    #     options=options)
-    #     df=pd.read_csv(fileName)
-    #     df.plot()
-    #     plt.show()
-
 class Worker(QObject):
     popen_string = " "
     plugin_name = ""
     finished = Signal()
     plugin_dict = {}
     cur_string = Signal(str)
+    failed = Signal()
     status = True
+    _isRunning = True
     # progress = Signal(int)
     def run(self):
         "Actually installs the files"
-        r = client.get(f"http://127.0.0.1:8000/plugin_manager/install/{self.plugin_name}")
-        time.sleep(3)
-        r = client.get(f"http://127.0.0.1:8000/plugins/reload")
-        
+        if self._isRunning:
+            r = client.get(f"http://127.0.0.1:8000/plugin_manager/install/{self.plugin_name}")
+            try:
+                if r.json()["status"] == "failure":
+                    print("Bad Zip File")
+                    self.failed.emit()
+                    return {"status": "failure", "message": "Bad Zip File"}
+            except:
+                print("Plugin failed to install")
+                self.failed.emit()
+                return {"status": "failure", "message": "Plugin failed to install"}
+        if self._isRunning:
+            loop = QEventLoop()
+            QTimer.singleShot(3000, loop.quit)
+            loop.exec_()        
+            
+            r = client.get(f"http://127.0.0.1:8000/plugins/reload")
+
         "Test run of environment and plugin including downloading and loading weights"
-        r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{self.plugin_name}")
+        if self._isRunning:
+            r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{self.plugin_name}")
         result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
-        while result[self.plugin_name]["state"] != "RUNNING":
-            time.sleep(10)
+        while result[self.plugin_name]["state"] != "RUNNING" and self._isRunning:
+            loop = QEventLoop()
+            QTimer.singleShot(10000, loop.quit)
+            loop.exec_() 
             result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
         r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{self.plugin_name}")
         self.status = False
         self.finished.emit()   
 
-    # def changeText(self):
-    #     text = "Installing"
-    #     while True:
-    #         time.sleep(1)
-    #         text += "."
-    #         if text == "Installing....":
-    #             text = "Installing."
-    #         self.cur_string.emit(text)
+    def stop(self):
+        self._isRunning = False
 
 class UninstallWorker(QObject):
     plugin_name = ""
@@ -413,8 +396,20 @@ class PluginManagerGUI(QWidget):
         #     thread = self.thread2
         # elif row_number == 3:
         #     thread = self.thread3
+        self.deactivate_install_button(plugin_name)
+
         thread = ""
         self.thread_process(f"conda env create -f {folder_path}/environment.yml", row_number, thread)
+
+    def deactivate_install_button(self, plugin_name):
+        row = list(self.plugin_dict.keys()).index(plugin_name)
+        
+        for name in self.button_dict.keys():
+            if name != plugin_name:
+                self.button_dict[name].setDisabled(True)
+                self.button_dict[name].setStyleSheet("color: grey")
+
+                
 
     def uninstall_plugin(self, plugin_name):
         if plugin_name not in os.listdir(fastapi_launcher_path):
@@ -467,6 +462,25 @@ class PluginManagerGUI(QWidget):
         self.tableWidget.setCellWidget(row, 4, button)
         print("Finish env", plugin_name)    
 
+    def closeEvent(self, event):
+        for i in range(len(self.workers)):
+            worker = self.workers[i]
+            thread = self.threads[i]
+            worker.finished.connect(worker.deleteLater)
+            thread.finished.connect(thread.deleteLater)
+
+            worker.finished.emit()
+            worker.stop()
+            # thread.requestInterruption()
+            thread.quit()
+            thread.wait()
+
+
+        # for thread in self.threads:
+        #     thread.quit()
+        #     thread.wait
+        event.accept()
+
     def thread_process(self, popen_string, row_number, thread):
 
         plugin_name = list(self.plugin_dict.keys())[row_number]
@@ -490,8 +504,21 @@ class PluginManagerGUI(QWidget):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
+        # worker.finished.connect(worker.deleteLater)
+        # thread.finished.connect(thread.deleteLater)
+        worker.failed.connect(thread.quit)
+        # worker.failed.connect(worker.deleteLater)
+
+        worker.failed.connect(lambda: self.install_button_creation(plugin_name))
+        worker.failed.connect(self.activate_install_buttons)
+
+        # thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
+        # thread.finished.connect(lambda: self.Installed(plugin_name))
+        # thread.finished.connect(self.activate_install_buttons)
+
+        worker.finished.connect(lambda: self.Installed(plugin_name))
+        worker.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
+        worker.finished.connect(self.activate_install_buttons)
 
         # installing_worker.moveToThread(installing_thread)
         # installing_thread.started.connect(installing_worker.changeText)
@@ -500,11 +527,14 @@ class PluginManagerGUI(QWidget):
         # worker.finished.connect(installing_worker.finished)
         # installing_worker.finished.connect(installing_worker.deleteLater)
         # installing_thread.finished.connect(installing_thread.deleteLater)
-
         thread.start()
         # installing_thread.start()
-        thread.finished.connect(lambda: self.uninstall_button_creation(plugin_name))
-        thread.finished.connect(lambda: self.Installed(plugin_name))
+        
+    
+    def activate_install_buttons(self):
+        for name in self.button_dict.keys():
+            self.button_dict[name].setEnabled(True)
+            self.button_dict[name].setStyleSheet("color: black")
     
     def Installed(self, plugin_name):
         row = list(self.plugin_dict.keys()).index(plugin_name)
