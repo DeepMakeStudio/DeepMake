@@ -117,9 +117,11 @@ class AuthHandler():
         while True:
             try:
                 # Set the range header to request a subset of the file
-                headers = {'Range': f'bytes={start}-'}
+                headers['Range'] = f'bytes={start}-'
                 response = requests.get(url, headers=headers, stream=True)
                 response.raise_for_status()  # Check for request errors
+                if response.status_code > 299:
+                    return response
 
                 # Read the content in chunks
                 for chunk in response.iter_content(chunk_size=1024):  # 1KB chunks
