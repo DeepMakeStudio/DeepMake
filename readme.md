@@ -43,6 +43,10 @@ Now that you've completed installation you're ready to use DeepMake
 
 To use DeepMake simply activate the plugin from Effects/DeepMake/AI Plugin Renderer
 
+For a video guide: 
+
+[![Loading DeepMake in After Effects Video Guide](https://img.youtube.com/vi/wQzkNe4Bh3c/0.jpg)](https://www.youtube.com/watch?v=wQzkNe4Bh3c)
+
 Then you may choose from the installed plugins.  Each processing plugin will have its own settings for you to configure.  DeepMake automatically makes the options that each processning plugin use visibile for you to modify.
 
 ## For more
