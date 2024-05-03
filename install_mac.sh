@@ -37,18 +37,33 @@ conda_install_path="$user_home/miniconda3"
 aeplugin_path="/Library/Application Support/Adobe/Common/Plug-ins/7.0/MediaCore/"
 
 #If config_path is inside / then exit
-if [[ $config_path == /Library* ]]; then
+if [[ "$config_path" == /Library/* ]]; then
     echo "config_path is in root, exiting to prevent deletion of root files"
     echo $config_path
     exit 1
 fi
+if [[ "$install_path" == /Library/* ]]; then
+    echo "install_path is in root, exiting to prevent deletion of root files"
+    echo $install_path
+    exit 1
+fi
 
-mkdir -p $install_path
-mkdir -p $config_path
+mkdir -p "$config_path"
+if ! [ -d "$config_path" ]; then
+    echo "Failed to create $config_path"
+    exit 1
+fi
+
+mkdir -p "$install_path"
+if ! [ -d "$install_path" ]; then
+    echo "Failed to create $install_path"
+    exit 1
+fi
+
 
 #Create Config file
 config_data=`echo '{ "Py_Environment": "conda activate deepmake;", "Startup_CMD": " python startup.py", "Directory": "cd '$install_path' ;" }' | sed 's^Application\ Support^Application\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ Support^'`
-echo "$config_data" > $config_path/Config.json
+echo "$config_data" > "$config_path"/Config.json
 
 #Install conda if not installed
 if command -v conda &> /dev/null; then
@@ -168,7 +183,6 @@ rm -Rf $TMP_DIR
 
 #Change ownership of config_path and install_path
 chown -R $user "$config_path"
-chown -R $user "$install_path"
 
 #if ownership of config_path is not the user, exit
 if [ "$(stat -f %Su $config_path | head -n1)" != "$user" ]; then
@@ -176,6 +190,8 @@ if [ "$(stat -f %Su $config_path | head -n1)" != "$user" ]; then
     echo "is $(stat -f %Su $config_path) should be $user"
     exit 1
 fi
+
+chown -R $user "$install_path"
 
 #if ownership of install_path is not the user, exit
 if [ "$(stat -f %Su $install_path | head -n1)" != "$user" ]; then
