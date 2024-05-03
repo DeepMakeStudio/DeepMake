@@ -22,4 +22,4 @@ huey.db*
 huey_storage.db*
 
 #plugins
-plugins/
+plugin/
