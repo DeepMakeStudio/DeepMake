@@ -185,18 +185,18 @@ rm -Rf $TMP_DIR
 chown -R $user "$config_path"
 
 #if ownership of config_path is not the user, exit
-if [ "$(stat -f %Su '$config_path' | head -n1)" != "$user" ]; then
+if [ "$(stat -f %Su "$config_path" | head -n1)" != "$user" ]; then
     echo "Failed to change ownership of $config_path to $user"
-    echo "is $(stat -f %Su $config_path) should be $user"
+    echo "is $(stat -f %Su "$config_path") should be $user"
     exit 1
 fi
 
 chown -R $user "$install_path"
 
 #if ownership of install_path is not the user, exit
-if [ "$(stat -f %Su '$install_path' | head -n1)" != "$user" ]; then
+if [ "$(stat -f %Su "$install_path" | head -n1)" != "$user" ]; then
     echo "Failed to change ownership of $install_path to $user"
-    echo "is $(stat -f %Su $install_path) should be $user"
+    echo "is $(stat -f %Su "$install_path") should be $user"
     exit 1
 fi
 
