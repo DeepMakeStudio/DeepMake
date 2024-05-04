@@ -214,32 +214,21 @@ class Worker(QObject):
         "Actually installs the files"
         if self._isRunning:
             r = client.get(f"http://127.0.0.1:8000/plugin_manager/install/{self.plugin_name}")
-            try:
-                if r.json()["status"] == "failure":
-                    print("Bad Zip File")
-                    self.failed.emit()
-                    return {"status": "failure", "message": "Bad Zip File"}
-            except:
-                print("Plugin failed to install")
+            if r.status_code == 200:
+                result = r.json()
+            else:
                 self.failed.emit()
-                return {"status": "failure", "message": "Plugin failed to install"}
-        if self._isRunning:
-            loop = QEventLoop()
-            QTimer.singleShot(3000, loop.quit)
-            loop.exec_()        
-            
-            r = client.get(f"http://127.0.0.1:8000/plugins/reload")
+                return
+            installed = False
+            while not installed:
+                time.sleep(5)
+                r = client.get(f"http://127.0.0.1:8000/plugins/get_states")
+                if r.status_code == 200:
+                    result = r.json()
+                if self.plugin_name in result:
+                    if result[self.plugin_name]["state"] == "STOPPED":
+                        installed = True
 
-        "Test run of environment and plugin including downloading and loading weights"
-        if self._isRunning:
-            r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{self.plugin_name}")
-        result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
-        while result[self.plugin_name]["state"] != "RUNNING" and self._isRunning:
-            loop = QEventLoop()
-            QTimer.singleShot(10000, loop.quit)
-            loop.exec_() 
-            result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
-        r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{self.plugin_name}")
         self.status = False
         self.finished.emit()   
 

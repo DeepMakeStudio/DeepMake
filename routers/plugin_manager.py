@@ -1,7 +1,7 @@
 import os
 import sys
 import subprocess 
-from fastapi import APIRouter
+from fastapi import BackgroundTasks, APIRouter
 import requests
 import io
 from auth_handler import auth_handler as auth
@@ -14,8 +14,7 @@ import time
 router = APIRouter()
 client = requests.Session()
 
-@router.get("/install/{plugin_name}")
-async def install_plugin(plugin_name: str):
+def handle_install(plugin_name: str):
     plugin_dict = plugin_info()
     url = plugin_dict[plugin_name]["url"]
     cur_folder = os.getcwd()
@@ -32,17 +31,16 @@ async def install_plugin(plugin_name: str):
             print("Plugin already installed")
         else:
             print("Installed", plugin_name)
-        
-        # p = subprocess.Popen(f"unzip {plugin_name}.zip -d {plugin_folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
-        temp_folder_path = "plugin"
-        r = auth.get_url(url)
-        try:
-            z = zipfile.ZipFile(io.BytesIO(r))
-            z.extractall(temp_folder_path)
-        except zipfile.BadZipFile:
-            print("Bad Zip File")
-            return {"status": "failure", "message": "Bad Zip File"}
+        installed = False
+        while not installed:
+            r = auth.get_url(url)
+            try:
+                z = zipfile.ZipFile(io.BytesIO(r))
+                z.extractall(plugin_folder_path)
+                installed = True
+            except zipfile.BadZipFile:
+                print("Bad Zip File")
     if sys.platform != "win32":
         p = subprocess.Popen(f"git submodule update --init".split(), cwd=folder_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
@@ -58,18 +56,30 @@ async def install_plugin(plugin_name: str):
     else:
         p = subprocess.Popen(f"conda env create -f {folder_path}/environment.yml", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     p.wait()
-    # time.sleep(3)
-    #     # p = subprocess.Popen(f"tar -xf {plugin_name}.zip -C {plugin_folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # print("request start")
-    # r = client.get(f"http://127.0.0.1:8000/plugins/get_info/{plugin_name}")
-    # print("request end")
-    # args = r.json()
-    # args["plugin_name"] = plugin_name
-    # dummy_plugin = Plugin(Namespace(**args))
-    # dummy_plugin.on_install(args.config["model_urls"])
-    # Plugin().on_install({})
-    
+    r = client.get(f"http://127.0.0.1:8000/plugins/reload")
+        
+    #Start plugin and wait for it to start
+    r = client.get("http://127.0.0.1:8000/plugins/get_states")
+    if r.status_code == 200:
+        result = r.json()
+    if plugin_name not in result:
+        return {"status": "failure", "message": "Plugin not installed"}
+    r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{plugin_name}")
+    while result[plugin_name]["state"] != "RUNNING":
+        time.sleep(10)
+        r = client.get("http://127.0.0.1:8000/plugins/get_states")
+        if r.status_code == 200:
+            result = r.json()
+    r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{plugin_name}")
+
     return {"status": "success"}
+
+
+@router.get("/install/{plugin_name}")
+async def install_plugin(plugin_name: str, background_tasks: BackgroundTasks):
+    background_tasks.add_task(handle_install, plugin_name)
+    
+    return {"status": "installing"}
 
 @router.get("/uninstall/{plugin_name}")
 async def uninstall_plugin(plugin_name: str):
