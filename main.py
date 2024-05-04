@@ -160,6 +160,7 @@ def reload_plugin_list():
     global plugin_states
     plugin_states = {}
     for folder in os.listdir(PLUGINS_DIRECTORY):
+        print(folder)
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
                 pass
@@ -169,8 +170,9 @@ def reload_plugin_list():
                 plugin_list.append(folder)
                 if folder not in plugin_states:
                     plugin_states[folder] = "INIT"
+    print(plugin_list)
     for plugin in list(plugin_states.keys()):
-        if plugin_states[plugin] not in plugin_list:
+        if plugin not in plugin_list:
             if plugin in process_ids.keys():
                 stop_plugin(plugin)
             del plugin_states[plugin]
