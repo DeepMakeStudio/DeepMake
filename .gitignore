@@ -20,3 +20,6 @@ bin/
 #huey
 huey.db*
 huey_storage.db*
+
+#plugins
+plugin/
