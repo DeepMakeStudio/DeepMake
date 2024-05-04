@@ -84,12 +84,6 @@ app.include_router(report.router, tags=["report"], prefix="/report")
 app.include_router(login.router, tags=["login"], prefix="/login")
 client = requests.Session()
 
-port_mapping = {"main": 8000}
-process_ids = {}
-plugin_endpoints = {}
-plugin_memory = {}
-PLUGINS_DIRECTORY = "plugin"
-
 class Task(BaseModel):
     id: str
     name: str
@@ -110,6 +104,12 @@ most_recent_use = []
 
 plugin_info = {}
 
+port_mapping = {"main": 8000}
+process_ids = {}
+plugin_endpoints = {}
+plugin_memory = {}
+PLUGINS_DIRECTORY = "plugin"
+
 print(auth.logged_in)
 
 def fetch_image(img_id):
@@ -127,12 +127,17 @@ def get_main_pid(pid):
 
 @app.on_event("startup")
 def startup():
-    global plugin_list
-    plugin_list = []
-    load_plugins()
-    global plugin_states
-    plugin_states = {plugin: "INIT" for plugin in plugin_list}
+    reload_plugin_list()
     init_db()  # Initialize the database
+
+    if sys.platform != "win32":
+        p = subprocess.Popen("huey_consumer.py main.huey".split())
+    else:
+        huey_script_path = os.path.join(os.path.dirname(sys.executable), "Scripts\\huey_consumer.py")
+        p = subprocess.Popen([sys.executable, huey_script_path, "main.huey"], shell=True)
+    pid = p.pid
+
+    process_ids["huey"] = pid
 
 def init_db():
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
@@ -146,32 +151,32 @@ def init_db():
     conn.commit()
     conn.close()
 
-def load_plugins():
-    for folder in os.listdir(PLUGINS_DIRECTORY):
-        if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
-            if folder in plugin_list:
-                continue
-            if "plugin.py" not in os.listdir(os.path.join(PLUGINS_DIRECTORY, folder)):
-                continue
-            plugin_list.append(folder)
-
-    if sys.platform != "win32":
-        p = subprocess.Popen("huey_consumer.py main.huey".split())
-    else:
-        huey_script_path = os.path.join(os.path.dirname(sys.executable), "Scripts\\huey_consumer.py")
-        p = subprocess.Popen([sys.executable, huey_script_path, "main.huey"], shell=True)
-    pid = p.pid
-
-    process_ids["huey"] = pid
-
 def reload_plugin_list():
+    if "plugin_list" in globals():
+        del globals()["plugin_list"]
+        del globals()["plugin_states"]
+    global plugin_list
+    plugin_list=[]
+    global plugin_states
+    plugin_states = {}
     for folder in os.listdir(PLUGINS_DIRECTORY):
+        print(folder)
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
-                continue
-            if "plugin.py" not in os.listdir(os.path.join(PLUGINS_DIRECTORY, folder)):
-                continue
-            plugin_list.append(folder)
+                print(f"Plugin {folder} already in list")
+            elif "plugin.py" not in os.listdir(os.path.join(PLUGINS_DIRECTORY, folder)):
+                print(f"Plugin {folder} missing plugin.py")
+            else:
+                print(f"Adding {folder} to plugin list")
+                plugin_list.append(folder)
+                if folder not in plugin_states:
+                    print
+                    plugin_states[folder] = "INIT"
+    for plugin in plugin_states:
+        if plugin_states[plugin] not in plugin_list:
+            if plugin in process_ids.keys():
+                stop_plugin(plugin)
+            del plugin_states[plugin]
 
 async def serialize_image(image):
     image= base64.b64encode(await image.read())
