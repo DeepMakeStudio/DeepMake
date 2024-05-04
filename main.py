@@ -160,19 +160,16 @@ def reload_plugin_list():
     global plugin_states
     plugin_states = {}
     for folder in os.listdir(PLUGINS_DIRECTORY):
-        print(folder)
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
-                print(f"Plugin {folder} already in list")
+                pass
             elif "plugin.py" not in os.listdir(os.path.join(PLUGINS_DIRECTORY, folder)):
-                print(f"Plugin {folder} missing plugin.py")
+                pass
             else:
-                print(f"Adding {folder} to plugin list")
                 plugin_list.append(folder)
                 if folder not in plugin_states:
-                    print
                     plugin_states[folder] = "INIT"
-    for plugin in plugin_states:
+    for plugin in list(plugin_states.keys()):
         if plugin_states[plugin] not in plugin_list:
             if plugin in process_ids.keys():
                 stop_plugin(plugin)
