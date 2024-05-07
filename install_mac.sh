@@ -137,8 +137,7 @@ fi
 $conda_path env update -f "$install_path/plugin/Diffusers"/environment_mac.yml
 
 #Download binaries
-curl -s -L https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Binaries_Mac.zip -o "$TMP_DIR"/Binaries_Mac.zip
-
+curl -s -L --retry 10 --retry-delay 5 https://github.com/DeepMakeStudio/DeepMake/releases/latest/download/Binaries_Mac.zip -o "$TMP_DIR"/Binaries_Mac.zip
 if ! [ -f "$TMP_DIR"/Binaries_Mac.zip ]; then
     echo "Failed to download Binaries_Mac.zip"
     exit 1
@@ -155,7 +154,13 @@ if ! [ -d "$aeplugin_path" ]; then
     mkdir -p "$aeplugin_path"
 fi
 
+#unzip and error if failed
 unzip -o "$TMP_DIR"/Binaries_Mac.zip -d "$TMP_DIR" > /dev/null
+if [ $? -ne 0 ]; then
+    echo "Failed to unzip Binaries_Mac.zip"
+    exit 1
+fi
+
 # if /DeepMake/DeepMake_ae.bundle exists, remove it
 if [ -e "$aeplugin_path"/DeepMake_ae.bundle ]; then
     echo "Removing existing DeepMake_ae.bundle at $aeplugin_path"
