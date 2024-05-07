@@ -800,7 +800,7 @@ class ReportIssueDialog(QWidget):
             data['log_file_path'] = self.logFilePath
 
         try:
-            response = requests.post("http://127.0.0.1:8000/report/", data=data)
+            response = requests.post("http://127.0.0.1:8000/report/report", data=data)
             print("Response Status Code:", response.status_code)
             if response.ok:
                 print("Report sent successfully.")
