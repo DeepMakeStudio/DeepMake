@@ -808,6 +808,8 @@ class ReportIssueDialog(QWidget):
                 print(f"Failed to send report. Status code: {response.status_code}")
         except requests.RequestException as e:
             print(f"Error sending report: {e}")
+        finally:
+            self.close()
 
     def joinDiscord(self):
         webbrowser.open('https://discord.gg/U7FymgCM')
