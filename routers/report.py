@@ -19,8 +19,6 @@ async def report_issue(description: str = Form(...), log_file_path: str = Form(N
 
     try:
         with configure_scope() as scope:
-            scope.add_attachment(bytes=description.encode(), filename="description.txt", content_type="text/plain")
-
             if log_file_path and os.path.isfile(log_file_path):
                 with open(log_file_path, 'r') as log_file:
                     log_data = json.load(log_file)
@@ -30,7 +28,7 @@ async def report_issue(description: str = Form(...), log_file_path: str = Form(N
             else:
                 print("No log file was attached or log file does not exist.")
 
-            capture_message("Issue report processed with log file")
+            capture_message("Issue report created by user\n" + str(description))
     except Exception as e:
         print(f"Error processing the report: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing the report: {e}")
