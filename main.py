@@ -284,7 +284,14 @@ def get_plugin_info(plugin_name: str):
 
 @app.get("/plugins/get_config/{plugin_name}")
 def get_plugin_config(plugin_name: str):
-    if plugin_name in plugin_list: 
+    if plugin_name in plugin_list:
+        sleep = 0
+        while plugin_states[plugin] != "RUNNING":
+            start_plugin(plugin)
+            time.sleep(5)
+            sleep += 5
+            if sleep > 120:
+                return {"status": "failed", "error": "Plugin too slow to start"}
         if plugin_name in port_mapping.keys():
             port = port_mapping[plugin_name]
             r = client.get("http://127.0.0.1:" + port + "/get_config")
