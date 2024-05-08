@@ -106,7 +106,9 @@ if [ -z "$(ls -A "$install_path")" ]; then
 else
     echo "Updating DeepMake at $install_path"
     cd "$install_path"
-    git pull
+    git fetch --all
+    git reset --hard origin/main
+    git pull -f
     cd -
 fi
 
@@ -125,7 +127,9 @@ if [ -z "$(ls -A "$install_path/plugin/Diffusers")" ]; then
 else
     echo "Updating Diffusers Plugin at $install_path/plugin/Diffusers"
     cd "$install_path/plugin/Diffusers"
-    git pull
+    git fetch --all
+    git reset --hard origin/main
+    git pull -f
     cd -
 fi
 
