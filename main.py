@@ -53,9 +53,15 @@ sentry_sdk.init(
         HueyIntegration(),
     ],
 )
-sentry_sdk.set_user({"id": get_id()})
+user = {"id": get_id()}
 sentry_sdk.set_tag("platform", sys.platform)
 sentry_sdk.set_tag("os", sys.platform)
+if auth.logged_in:
+    user["email"] = auth.username
+    user_info = auth.get_user_info()
+    if "id" in user_info.keys():
+        user["acct_id"] = user_info["id"]
+sentry_sdk.set_user(user)
 
 sentry_sdk.capture_message('Backend started')
 
@@ -110,8 +116,6 @@ process_ids = {}
 plugin_endpoints = {}
 plugin_memory = {}
 PLUGINS_DIRECTORY = "plugin"
-
-print(auth.logged_in)
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
