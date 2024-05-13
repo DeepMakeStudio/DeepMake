@@ -209,4 +209,6 @@ if [ "$(stat -f %Su "$install_path" | head -n1)" != "$user" ]; then
     exit 1
 fi
 
+open "https://deepmake.com/postinstall/"
+
 echo "Installation complete."
