@@ -291,7 +291,7 @@ def get_plugin_info(plugin_name: str):
 def get_plugin_config(plugin_name: str):
     if plugin_name in plugin_list:
         sleep = 0
-        while plugin_states[plugin] != "RUNNING":
+        while plugin_states[plugin_name] != "RUNNING":
             start_plugin(plugin)
             time.sleep(5)
             sleep += 5
