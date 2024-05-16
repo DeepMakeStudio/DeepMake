@@ -485,7 +485,11 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
         response = client.get(url, timeout=240).json()
     elif endpoint['method'] == 'PUT':
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/"
-        response = client.put(url, json=json_data, timeout=240).json()
+        response = client.put(url, json=json_data, timeout=240)
+        if response.status_code == 200:
+            response = response.json()
+        else:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported method: {endpoint['method']}")
 
