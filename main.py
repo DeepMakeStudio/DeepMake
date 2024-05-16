@@ -455,7 +455,7 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
 
     if "method" not in endpoint.keys():
         endpoint["method"] = "GET"
-
+    print(endpoint['method'], endpoint)
     if endpoint['method'] == 'GET':
         inputs_string = ""
         for input in [input for input in endpoint['inputs'] if "optional=true" not in endpoint['inputs'][input]]:
@@ -470,9 +470,16 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
                 inputs_string += f"&{input}={str(json_data[input])}"
 
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
-        response = client.get(url, timeout=240).json()
+        response = client.get(url).json()
     elif endpoint['method'] == 'PUT':
-        url = f"http://127.0.0.1:{port}/{endpoint['call']}/"
+        inputs_string = ""
+        for ct, input in enumerate([input for input in json_data.keys() if "optional=true" in endpoint['inputs'][input]]):
+            if ct == 0:
+                inputs_string += f"?{input}={str(json_data[input])}"
+            else:
+                inputs_string += f"&{input}={str(json_data[input])}"
+        url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
+        print(url)
         response = client.put(url, json=json_data, timeout=240).json()
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported method: {endpoint['method']}")
