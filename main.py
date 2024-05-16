@@ -455,7 +455,6 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
 
     if "method" not in endpoint.keys():
         endpoint["method"] = "GET"
-    print(endpoint['method'], endpoint)
     if endpoint['method'] == 'GET':
         inputs_string = ""
         for input in [input for input in endpoint['inputs'] if "optional=true" not in endpoint['inputs'][input]]:
