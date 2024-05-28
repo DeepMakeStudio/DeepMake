@@ -23,7 +23,7 @@ import numpy as np
 import sys
 import importlib
 from time import sleep
-from huey import SqliteHuey
+from huey import SqliteHuey, crontab
 from huey.storage import SqliteStorage
 from huey.constants import EmptyData
 from huey.exceptions import TaskException
@@ -108,6 +108,7 @@ port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
 plugin_memory = {}
+rebuilding_env = {}
 PLUGINS_DIRECTORY = "plugin"
 
 print(auth.logged_in)
@@ -358,9 +359,9 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     conda_env = plugin_info[plugin_name]["plugin"]["env"]
     if sys.platform != "win32":
         if CONDA:
-            p = subprocess.Popen(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split())
+            p = subprocess.Popen(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE)
         else:
-            p = subprocess.Popen(f"envs\plugins\python -m uvicorn plugin.{plugin_name}.plugin:app --port {port}".split())
+            p = subprocess.Popen(f"envs\plugins\python -m uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE)
     else:
         if CONDA:
             if os.getenv('CONDA_EXE'):
@@ -377,10 +378,31 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
                 p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
         else:
             p = subprocess.Popen(f"envs\\plugins\\python.exe -m uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+    try:
+        r = p.communicate(timeout=3)
+        if r[0] == b'':
+            print("Rebuilding environment")
+            if sys.platform != "win32":
+                if sys.platform != "darwin":
+                    p = subprocess.Popen(f"conda env update -f plugin/{plugin_name}/environment.yml".split(), stdout=subprocess.PIPE)
+                else:
+                    p = subprocess.Popen(f"conda env update -f plugin/{plugin_name}/environment_mac.yml".split(), stdout=subprocess.PIPE)
+            else:
+                p = subprocess.Popen(f"{conda_path} env update -f plugin\\{plugin_name}\\environment.yml", shell=True, stdout=subprocess.PIPE)
+            print(p.pid)
+            rebuilding_env[plugin_name] = p
+            schedule_message(p.pid, plugin_name, "*/1")
+            return {"started": False, "status": "Rebuilding environment"}
+    except subprocess.TimeoutExpired:
+        pass
     pid = p.pid
     process_ids[plugin_name] = pid
 
     return {"started": True, "plugin_name": plugin_name, "port": port}
+
+@app.get("/plugins/envs")
+def get_envs():
+    return {"envs": list(rebuilding_env.keys())}
 
 @app.get("/plugins/stop_plugin/{plugin_name}")
 def stop_plugin(plugin_name: str):
@@ -542,8 +564,10 @@ def get_running_jobs():
 
 @app.get("/backend/shutdown")
 def shutdown():
+    print(process_ids)
     for plugin_name in list(process_ids.keys()):
-        stop_plugin(plugin_name)
+        if plugin_name != "main":
+            stop_plugin(plugin_name)
     
     if os.path.exists(os.path.join(storage_folder, "huey")):
         shutil.rmtree(os.path.join(storage_folder, "huey"))
@@ -554,23 +578,11 @@ def shutdown():
             os.remove(os.path.join(storage_folder, "huey.db"))
         except PermissionError:
             print("Failed to remove huey.db")
-
     stop_plugin("main")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    for plugin_name in list(process_ids.keys()):
-        stop_plugin(plugin_name)
-    
-    if os.path.exists(os.path.join(storage_folder, "huey")):
-        shutil.rmtree(os.path.join(storage_folder, "huey"))
-    if os.path.exists(os.path.join(storage_folder, "huey_storage")):
-        shutil.rmtree(os.path.join(storage_folder, "huey_storage"))
-    if os.path.exists(os.path.join(storage_folder, "huey.db")):
-        try:
-            os.remove(os.path.join(storage_folder, "huey.db"))
-        except PermissionError:
-            print("Failed to remove huey.db")
+    shutdown()
 
 @app.put("/job")
 def add_job(job: Job):
@@ -693,3 +705,45 @@ def delete_data(key: str):
     conn.commit()
     conn.close()
     return {"message": "Data deleted successfully"}
+
+# @huey.periodic_task(crontab(minute='*/1'))
+# def check_environment():
+#     working = []
+#     finished = []
+#     print(rebuilding_env)
+#     for plugin in list(rebuilding_env.keys()):
+#         process = rebuilding_env[plugin]
+#         try:
+#             out, _ = process.communicate(timeout=3)
+#             if out:
+#                 print(f"Done rebuilding {plugin} environment")
+#                 rebuilding_env.pop(plugin)
+#                 finished.append(plugin)
+#         except subprocess.TimeoutExpired:
+#             print(f"Rebuilding {plugin} environment")
+#             working.append(plugin)
+#             continue
+#     return {"status": "success", "message": f"Still building {working}. Finished building {finished}"}
+
+def check_env(process, plugin_name):
+    output = subprocess.check_output("ps axo pid".split()).decode("utf-8").split("\n")
+    output = [f.strip() for f in output]
+    if str(process) not in output:
+        print(f"Done rebuilding environment for {plugin_name}")
+        return {"status": "success", "message": f"Done rebuilding environment for {plugin_name}"}
+    else:
+        print(f"Still rebuilding environment for {plugin_name}")
+        return {"status": "success", "message": f"Still rebuilding environment for {plugin_name}"}
+
+@huey.task()
+def schedule_message(process, plugin_name, cron_minutes, cron_hours='*'):
+
+    def wrapper():
+        check_env(process, plugin_name)
+
+    schedule = crontab("*/1", cron_hours)
+
+    task_name = 'check_env_' + str(int(time.time()))
+
+    huey.periodic_task(schedule, name=task_name)(wrapper)
+            
