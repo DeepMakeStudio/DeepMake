@@ -53,8 +53,15 @@ sentry_sdk.init(
         HueyIntegration(),
     ],
 )
-sentry_sdk.set_user({"id": get_id()})
+user = {"id": get_id()}
 sentry_sdk.set_tag("platform", sys.platform)
+sentry_sdk.set_tag("os", sys.platform)
+if auth.logged_in:
+    user["email"] = auth.username
+    user_info = auth.get_user_info()
+    if "id" in user_info.keys():
+        user["acct_id"] = user_info["id"]
+sentry_sdk.set_user(user)
 
 sentry_sdk.capture_message('Backend started')
 
@@ -110,8 +117,6 @@ plugin_endpoints = {}
 plugin_memory = {}
 rebuilding_env = {}
 PLUGINS_DIRECTORY = "plugin"
-
-print(auth.logged_in)
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
@@ -285,7 +290,14 @@ def get_plugin_info(plugin_name: str):
 
 @app.get("/plugins/get_config/{plugin_name}")
 def get_plugin_config(plugin_name: str):
-    if plugin_name in plugin_list: 
+    if plugin_name in plugin_list:
+        sleep = 0
+        while plugin_states[plugin_name] != "RUNNING":
+            start_plugin(plugin_name)
+            time.sleep(5)
+            sleep += 5
+            if sleep > 120:
+                return {"status": "failed", "error": "Plugin too slow to start"}
         if plugin_name in port_mapping.keys():
             port = port_mapping[plugin_name]
             r = client.get("http://127.0.0.1:" + port + "/get_config")
@@ -486,7 +498,11 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
         response = client.get(url, timeout=240).json()
     elif endpoint['method'] == 'PUT':
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/"
-        response = client.put(url, json=json_data, timeout=240).json()
+        response = client.put(url, json=json_data, timeout=240)
+        if response.status_code == 200:
+            response = response.json()
+        else:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported method: {endpoint['method']}")
 

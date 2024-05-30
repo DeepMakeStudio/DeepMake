@@ -106,7 +106,9 @@ if [ -z "$(ls -A "$install_path")" ]; then
 else
     echo "Updating DeepMake at $install_path"
     cd "$install_path"
-    git pull
+    git fetch --all
+    git reset --hard origin/main
+    git pull -f
     cd -
 fi
 
@@ -125,7 +127,9 @@ if [ -z "$(ls -A "$install_path/plugin/Diffusers")" ]; then
 else
     echo "Updating Diffusers Plugin at $install_path/plugin/Diffusers"
     cd "$install_path/plugin/Diffusers"
-    git pull
+    git fetch --all
+    git reset --hard origin/main
+    git pull -f
     cd -
 fi
 
@@ -204,5 +208,7 @@ if [ "$(stat -f %Su "$install_path" | head -n1)" != "$user" ]; then
     echo "is $(stat -f %Su "$install_path") should be $user"
     exit 1
 fi
+
+open "https://deepmake.com/postinstall/"
 
 echo "Installation complete."
