@@ -115,7 +115,6 @@ port_mapping = {"main": 8000}
 process_ids = {}
 plugin_endpoints = {}
 plugin_memory = {}
-rebuilding_env = {}
 PLUGINS_DIRECTORY = "plugin"
 
 def fetch_image(img_id):
@@ -318,6 +317,8 @@ def set_plugin_config(plugin_name: str, config: dict):
             # port = port_mapping[plugin_name]
             # r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
             job = huey_set_config(plugin_name, config, port_mapping)
+            new_job(job)
+
             # after_memory = memory_func()
             # new_model_memory = initial_memory - after_memory
             # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
@@ -360,6 +361,7 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     store_data(f"{plugin_name}_available", {"memory": int(available_memory)})
 
     plugin_states[plugin_name] = "STARTING"
+    print(f"Starting plugin {plugin_name}")
     if port is None:
         port = np.random.randint(min_port,max_port)
         while port in list(port_mapping.values()):
@@ -394,6 +396,11 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
         if r[0] == b'':
             print("Rebuilding environment")
             job = rebuild_env(plugin_name)
+            new_job(job)
+            del port_mapping[plugin_name]
+            plugin_states[plugin_name] = "REINSTALLING"
+
+
             return {"started": False, "status": "Rebuilding environment", "job_id": job.id}
     except subprocess.TimeoutExpired:
         pass
