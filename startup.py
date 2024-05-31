@@ -14,6 +14,16 @@ if __name__ == "__main__":
         main_proc = subprocess.Popen(f"uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info", shell=True)
     
     pid = main_proc.pid
-    time.sleep(3)
-    r = client.get(f"http://127.0.0.1:8000/get_main_pid/{pid}")
+    startup_attempts = 10
+    while startup_attempts > 0:
+        try:
+            r = client.get(f"http://127.0.0.1:8000/get_main_pid/{pid}")
+        except requests.exceptions.ConnectionError:
+            time.sleep(3)
+            startup_attempts -= 1
+            continue
+        if r.status_code == 200:
+            break
+    if startup_attempts == 0:
+        raise Exception(f"Backend didn't start in time: {r.text}")
 # uvicorn.run("main:app", host="127.0.0.1", port=8000, log_level="info")
