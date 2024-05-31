@@ -82,16 +82,17 @@ if __name__ == "__main__":
         raise Exception(f"Config file not found: {config_path}")
     config_data = json.load(open(config_path,'r'))
     try:
-        command = config_data['Py_Environment'] + config_data['Startup_CMD']
+        command = (config_data['Py_Environment'] + config_data['Startup_CMD']).replace("conda activate", "conda run -n").replace(";","").strip()
+        directory = config_data['Directory'].replace("cd ","").replace("\\","").replace(";","").strip()
     except Exception as e:
         send_sentry(f"Failed to start backend\nConfig file missing required fields\n{e}")
         raise e
 
     try:
         if sys.platform != "win32":
-            main_proc = subprocess.Popen(command)
+            main_proc = subprocess.Popen(command.split(), cwd=directory)
         else:
-            main_proc = subprocess.Popen(command)
+            main_proc = subprocess.Popen(command, cwd=directory)
         pid = main_proc.pid
         time.sleep(5)
     except Exception as e:
