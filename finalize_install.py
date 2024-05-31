@@ -81,7 +81,11 @@ if __name__ == "__main__":
         send_sentry(f"Failed to start backend\nConfig file not found")
         raise Exception(f"Config file not found: {config_path}")
     config_data = json.load(open(config_path,'r'))
-    command = config_data['Py_Environment'] + config_data['Startup_CMD']
+    try:
+        command = config_data['Py_Environment'] + config_data['Startup_CMD']
+    except Exception as e:
+        send_sentry(f"Failed to start backend\nConfig file missing required fields\n{e}")
+        raise e
 
     try:
         if sys.platform != "win32":
