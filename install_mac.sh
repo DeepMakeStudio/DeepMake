@@ -70,6 +70,7 @@ if command -v conda &> /dev/null; then
     echo "conda is installed and available in the PATH"
     conda_path="conda"
     $conda_path init zsh bash
+    $conda_path config --set auto_activate_base false
 else
     conda_path=$conda_install_path"/bin/conda"
     echo "conda is not installed or not in the PATH"
@@ -210,5 +211,7 @@ if [ "$(stat -f %Su "$install_path" | head -n1)" != "$user" ]; then
 fi
 
 open "https://deepmake.com/postinstall/"
+
+python $install_path/finalize_install.py
 
 echo "Installation complete."
