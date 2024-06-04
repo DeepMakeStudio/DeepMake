@@ -13,7 +13,8 @@ if __name__ == "__main__":
     else:
         main_proc = subprocess.Popen(f"uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info", shell=True)
     
-    pid = main_proc.pid
+    # pid = main_proc.pid
     time.sleep(3)
-    r = client.get(f"http://127.0.0.1:8000/get_main_pid/{pid}")
+    r = client.get(f"http://127.0.0.1:8000/frontend/start/AE")   
+    # r = client.get(f"http://127.0.0.1:8000/get_main_pid/{pid}")
 # uvicorn.run("main:app", host="127.0.0.1", port=8000, log_level="info")

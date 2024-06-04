@@ -10,6 +10,7 @@ from PIL import Image
 from io import BytesIO
 from auth_handler import auth_handler as auth
 from plugin import Plugin
+from fastapi_utils.tasks import repeat_every
 
 import os
 import base64
@@ -43,6 +44,7 @@ CONDA = "MiniConda3"
 
 def get_id(): # return md5 hash of uuid.getnode()
     return md5(str(uuid.getnode()).encode()).hexdigest()
+
 
 sentry_sdk.init(
     dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
@@ -108,11 +110,13 @@ finished_jobs = []
 running_jobs = []
 jobs = {}
 most_recent_use = []
+time_running = {}
+frontends = []
 
 plugin_info = {}
 
 port_mapping = {"main": 8000}
-process_ids = {}
+process_ids = {"main": os.getpid()}
 plugin_endpoints = {}
 plugin_memory = {}
 PLUGINS_DIRECTORY = "plugin"
@@ -143,6 +147,11 @@ def startup():
     pid = p.pid
 
     process_ids["huey"] = pid
+    start_time()
+
+@huey.task()
+def start_time():
+    r = client.get(f"http://127.0.0.1:8000/timekeeper/start/")
 
 def init_db():
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
@@ -373,6 +382,8 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     if sys.platform != "win32":
         if CONDA:
             p = subprocess.Popen(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE)
+            # print("GUNICORN")
+            # p = subprocess.Popen(f"conda run -n {conda_env} gunicorn plugin.{plugin_name}.plugin:app --bind 127.0.0.1:{port} --worker-class uvicorn.workers.UvicornWorker".split(), stdout=subprocess.PIPE)
         else:
             p = subprocess.Popen(f"envs\plugins\python -m uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE)
     else:
@@ -406,7 +417,7 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
         pass
     pid = p.pid
     process_ids[plugin_name] = pid
-
+    # time_running[plugin_name] = 0
     return {"started": True, "plugin_name": plugin_name, "port": port}
 
 @huey.task()
@@ -434,6 +445,7 @@ def stop_plugin(plugin_name: str):
         if plugin_name != "huey":
             port_mapping.pop(plugin_name)
             plugin_states[plugin_name] = "STOPPED"
+            del time_running[plugin_name]
         
     return {"status": "Success", "description": f"{plugin_name} stopped"}
     
@@ -469,6 +481,7 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
     if warnings != []:
         return {"job_id": job.id, "warnings": warnings}
     new_job(job)
+    time_running[plugin_name] = 0
     return {"job_id": job.id}
 
 @huey.task()
@@ -545,7 +558,7 @@ def plugin_callback(plugin_name: str, status: str):
         
         # store_data(f"{plugin_name}_model_memory", {"memory": int(model_memory)})
         # model_memory = store_data(f"{plugin_name}_model_memory")["memory"]
-
+        time_running[plugin_name] = 0
         return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
     else:
         print(f"{plugin_name} failed to start")
@@ -593,6 +606,30 @@ def shutdown():
         except PermissionError:
             print("Failed to remove huey.db")
     stop_plugin("main")
+    # if sys.platform != "win32":
+    #     p = subprocess.Popen("pkill gunicorn".split())
+    # else:
+    #     p = subprocess.Popen("pkill gunicorn", shell=True)
+    # p.wait()
+
+@app.get("/frontend/start/{frontend_name}")
+def start_frontend(frontend_name: str):
+    frontends.append(frontend_name)
+    return {"status": "success", "frontends": frontends}
+
+@app.get("/frontend/stop/{frontend_name}")
+def stop_frontend(frontend_name: str):
+    if frontend_name not in frontends:
+        return {"status": "failed", "error": f"Frontend {frontend_name} is not running"}
+    if len(frontends) == 1:
+        shutdown()
+    else:
+        frontends.remove(frontend_name)
+    return {"status": "success", "frontends": frontends}
+
+@app.get("/frontend/running")
+def get_frontends():
+    return {"frontends": frontends}
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -719,4 +756,18 @@ def delete_data(key: str):
     conn.commit()
     conn.close()
     return {"message": "Data deleted successfully"}
+
+@app.get("/timekeeper/start")
+@repeat_every(seconds=60)
+def timekeeper() -> None:
+    print(time_running)
+    for plugin in time_running.keys():
+        time_running[plugin] += 1
+        if time_running[plugin] >= 30:
+            stop_plugin(plugin)
+
+@app.get("/timekeeper")
+def get_timekeeper():
+    return time_running
+    
             
