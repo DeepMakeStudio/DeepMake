@@ -300,7 +300,10 @@ def get_plugin_config(plugin_name: str):
         if plugin_name in port_mapping.keys():
             port = port_mapping[plugin_name]
             r = client.get("http://127.0.0.1:" + port + "/get_config")
-            return r.json()
+            if r.status_code == 200:
+                return r.json()
+            else:
+                return {"status": "failed", "error": r.text}
         else:
             try:
                 print(f"Getting config for {plugin_name}")
@@ -344,8 +347,10 @@ def set_plugin_config(plugin_name: str, config: dict):
 def huey_set_config(plugin_name: str, config: dict, port_mapping):
     port = port_mapping[plugin_name]
     r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
-    return r.json()
-            # after_memory = memory_func()
+    if r.status_code == 200:
+        return r.json()
+    else:
+        raise TaskException(f"Failed to set config for {plugin_name}")
 
 @app.get("/plugins/start_plugin/{plugin_name}")
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
@@ -467,11 +472,17 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
 
 @huey.task()
 def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
-    result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+    result = client.get("http://127.0.0.1:8000/plugins/get_states") # Calls REST instead of directly because of missing global due to threading
+    if result.status_code == 200:
+        result = result.json()
+    else:
+        raise HTTPException(status_code=500, detail="Failed to get plugin states")
     counter = 0
     while result[plugin_name]["state"] != "RUNNING":
         sleep(10)
-        result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+        result = client.get("http://127.0.0.1:8000/plugins/get_states")
+        if result.status_code == 200:
+            result = result.json()
         counter += 1
         if counter > 10:
             raise HTTPException(status_code=504, detail=f"Plugin {plugin_name} failed to start")
@@ -496,7 +507,9 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
                 inputs_string += f"&{input}={str(json_data[input])}"
 
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
-        response = client.get(url, timeout=240).json()
+        response = client.get(url, timeout=240)
+        if response.status_code == 200:
+            response = response.json()
     elif endpoint['method'] == 'PUT':
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/"
         response = client.put(url, json=json_data, timeout=240)
