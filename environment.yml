@@ -8,6 +8,7 @@ dependencies:
       - anyio
       - click
       - fastapi
+      - fastapi_utils
       - gradio
       - h11
       - huey
@@ -19,6 +20,7 @@ dependencies:
       - sentry-sdk[fastapi]
       - sniffio
       - starlette
+      - typing_inspect
       - uvicorn
       - psutil
       - pyjwt
