@@ -309,7 +309,10 @@ def get_plugin_config(plugin_name: str):
         if plugin_name in port_mapping.keys():
             port = port_mapping[plugin_name]
             r = client.get("http://127.0.0.1:" + port + "/get_config")
-            return r.json()
+            if r.status_code == 200:
+                return r.json()
+            else:
+                raise HTTPException(status_code=404, detail="Plugin must be running to check config")
         else:
             raise HTTPException(status_code=404, detail="Plugin must be running to check config")
     else:
@@ -341,7 +344,10 @@ def set_plugin_config(plugin_name: str, config: dict):
 def huey_set_config(plugin_name: str, config: dict, port_mapping):
     port = port_mapping[plugin_name]
     r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
-    return r.json()
+    if r.status_code == 200:
+        return r.json()
+    else:
+        return {"status": "failed", "error": "Failed to set config"}
 
 @app.get("/plugins/start_plugin/{plugin_name}")
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
@@ -423,7 +429,10 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
 @huey.task()
 def rebuild_env(plugin_name):
     r = client.get("http://127.0.0.1:8000/plugin_manager/install/" + plugin_name)
-    return r.json()
+    if r.status_code == 200:
+        return r.json()
+    else:
+        return {"status": "failed", "error": "Failed to rebuild environment"}
 
 @app.get("/plugins/stop_plugin/{plugin_name}")
 def stop_plugin(plugin_name: str):
@@ -515,7 +524,11 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
                 inputs_string += f"&{input}={str(json_data[input])}"
 
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
-        response = client.get(url, timeout=240).json()
+        r = client.get(url, timeout=240)
+        if r.status_code == 200:
+            response = r.json()
+        else:
+            raise HTTPException(status_code=r.status_code, detail=r.text)
     elif endpoint['method'] == 'PUT':
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/"
         response = client.put(url, json=json_data, timeout=240)
