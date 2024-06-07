@@ -117,7 +117,15 @@ class Plugin():
             print(f"{stage}: {progress*100}% complete")
         else:
             print(f"{stage}: Progress not available")
+        
+    def startup_notification(self):
 
+        callback_url = f"http://localhost:8000/plugin/start_callback/{self.plugin_name}"
+        try:
+            response = requests.get(callback_url)
+            print("Response from main system:", response.json())  # Print the response content
+        except:
+            print("Failed to notify the main system. Ensure it's running.")
 
     def download_model(self, model_url, save_path, progress_callback=None):
         """Download a model with a progress bar and report progress in 5% increments."""

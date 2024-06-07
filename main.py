@@ -578,6 +578,11 @@ def plugin_callback(plugin_name: str, status: str):
         plugin_states.pop(plugin_name)
         return {"status": "error", "message": f"{plugin_name} failed to start because {status}"}
 
+@app.get("/plugin/start_callback/{plugin_name}")
+def start_callback(plugin_name: str):
+    print(f"Starting {plugin_name}. Will notify when ready to run.")
+    return {"status": "success", "message": f"Starting {plugin_name}. Will notify when ready to run."}
+
 @app.post("/plugin_install_callback/{plugin_name}/{progress}/{stage}")
 async def plugin_install_callback(plugin_name: str, progress: float, stage: str):
     # Handle installation progress update here
