@@ -280,9 +280,12 @@ class PluginManagerGUI(QWidget):
             self.scrollArea.verticalScrollBar().sizeHint().width() + 
             self.scrollArea.frameWidth() * 2)
         self.scrollArea.setMinimumWidth(width)
+        self.aewarning = QLabel("Restart After Effects for any changes to take effect.")
+        self.aewarning.setStyleSheet("font-size: 20px; font-weight: bold;")
 
         self.layout = QVBoxLayout() 
         self.layout.addWidget(self.tableWidget) 
+        self.layout.addWidget(self.aewarning)
         self.setLayout(self.layout) 
         self.threads = [QThread() for i in range(len(self.plugin_dict.keys()))]
         self.workers = [Worker() for i in range(len(self.plugin_dict.keys()))]
