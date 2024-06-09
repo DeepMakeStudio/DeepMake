@@ -291,12 +291,12 @@ def get_plugin_info(plugin_name: str):
 def get_plugin_config(plugin_name: str):
     if plugin_name in plugin_list:
         sleep = 0
-        while plugin_states[plugin_name] != "RUNNING":
-            start_plugin(plugin_name)
-            time.sleep(5)
-            sleep += 5
-            if sleep > 120:
-                return {"status": "failed", "error": "Plugin too slow to start"}
+        # while plugin_states[plugin_name] != "RUNNING":
+        #     start_plugin(plugin_name)
+        #     time.sleep(5)
+        #     sleep += 5
+        #     if sleep > 120:
+        #         return {"status": "failed", "error": "Plugin too slow to start"}
         if plugin_name in port_mapping.keys():
             port = port_mapping[plugin_name]
             r = client.get("http://127.0.0.1:" + port + "/get_config")
@@ -305,7 +305,16 @@ def get_plugin_config(plugin_name: str):
             else:
                 return {"status": "failed", "error": r.text}
         else:
-            raise HTTPException(status_code=404, detail="Plugin must be running to check config")
+            try:
+                print(f"Getting config for {plugin_name}")
+                print(f"plugin_config.{plugin_name}")
+                data = retrieve_data(f"plugin_config.{plugin_name}")
+                print(data)
+                return data
+            except Exception as e:
+                print(e)
+                print("Plugin config not found in DB, getting default")
+                return get_plugin_info(plugin_name)["config"]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
@@ -325,7 +334,12 @@ def set_plugin_config(plugin_name: str, config: dict):
             # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
             return {"job_id": job.id}
         else:
-            raise HTTPException(status_code=404, detail="Plugin must be running to change config")
+            try:
+                original_config = retrieve_data(f"plugin_config.{self.plugin_name}")
+            except:
+                original_config = get_plugin_info(plugin_name)["config"]
+            original_config.update(config)
+            store_data(f"plugin_config.{plugin_name}", original_config)
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
     

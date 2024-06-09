@@ -94,19 +94,23 @@ if __name__ == "__main__":
         else:
             main_proc = subprocess.Popen(command, cwd=directory)
         pid = main_proc.pid
-        time.sleep(5)
     except Exception as e:
         send_sentry(f"Failed to start backend\n{e}\nCommand: {command}")
         raise e
     
-    try:
-        r = client.get(f"http://127.0.0.1:8000/get_main_pid/{pid}")
-        if r.status_code != 200:
-            send_sentry(f"Failed to start backend\n{r.text}")
-            raise Exception(f"Failed to start backend: {r.text}")
-    except Exception as e:
-        send_sentry(f"Failed to start backend\n{e}")
-        raise e
+    delayed = 0
+    r = None
+    while delayed < 30:
+        try:
+            time.sleep(1)
+            delayed += 1
+            r = client.get(f"http://127.0.0.1:8000/get_main_pid/{pid}", timeout=1)
+        except Exception as e:
+            pass
+    if r is None:
+        send_sentry(f"Failed to start backend\nTimeout after {delayed} seconds")
+        raise Exception("nTimeout after {delayed} seconds")
+
     try:
         client.get("http://127.0.0.1:8000/backend/shutdown")
     except:
