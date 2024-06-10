@@ -52,3 +52,11 @@ class storage_db:
             data = json.loads(row[0])
             return data
         return False
+    
+    def delete_data(key: str):
+        conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM key_value_store WHERE key = ?", (key,))
+        conn.commit()
+        conn.close()
+        return True

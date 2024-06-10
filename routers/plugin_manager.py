@@ -10,9 +10,13 @@ from db_utils import retrieve_data
 from plugin import Plugin
 from argparse import Namespace
 import time
+from storage_db import storage_db
+
+
 
 router = APIRouter()
 client = requests.Session()
+storage = storage_db()
 
 def handle_install(plugin_name: str):
     plugin_dict = plugin_info()
@@ -20,58 +24,67 @@ def handle_install(plugin_name: str):
     cur_folder = os.getcwd()
     folder_path = os.path.join("plugin", plugin_name)
     plugin_folder_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "plugin")
-    if ".git" in url:
+    storage.store_data(f"{plugin_name}_install", {"status": "INSTALLING"})
+    try:
+        if ".git" in url:
+            if sys.platform != "win32":
+                p = subprocess.Popen(f"git clone {url} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            else:
+                p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (out, err) = p.communicate()
+            print(out, err)
+            if "already exists" in err.decode("utf-8"):
+                print("Plugin already installed")
+            else:
+                print("Installed", plugin_name)
+        else:
+            installed = False
+            while not installed:
+                r = auth.get_url(url)
+                try:
+                    z = zipfile.ZipFile(io.BytesIO(r))
+                    z.extractall(plugin_folder_path)
+                    installed = True
+                except zipfile.BadZipFile:
+                    print("Bad Zip File")
+        print("Installed folder")
         if sys.platform != "win32":
-            p = subprocess.Popen(f"git clone {url} {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            p = subprocess.Popen(f"git submodule update --init".split(), cwd=folder_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
-            p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (out, err) = p.communicate()
-        print(out, err)
-        if "already exists" in err.decode("utf-8"):
-            print("Plugin already installed")
-        else:
-            print("Installed", plugin_name)
-    else:
-        installed = False
-        while not installed:
-            r = auth.get_url(url)
-            try:
-                z = zipfile.ZipFile(io.BytesIO(r))
-                z.extractall(plugin_folder_path)
-                installed = True
-            except zipfile.BadZipFile:
-                print("Bad Zip File")
-    if sys.platform != "win32":
-        p = subprocess.Popen(f"git submodule update --init".split(), cwd=folder_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    else:
-        p = subprocess.Popen(f"git submodule update --init", cwd=folder_path, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    os.chdir(cur_folder)
-    
-    if sys.platform != "win32":
-        if sys.platform == "darwin":
-            popen_string = f"conda env create -f {folder_path}/environment_mac.yml"
-        else:
-            popen_string = f"conda env create -f {folder_path}/environment.yml"
-        p = subprocess.Popen(popen_string.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    else:
-        p = subprocess.Popen(f"conda env create -f {folder_path}/environment.yml", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    p.wait()
-    r = client.get(f"http://127.0.0.1:8000/plugins/reload")
+            p = subprocess.Popen(f"git submodule update --init", cwd=folder_path, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        os.chdir(cur_folder)
         
-    #Start plugin and wait for it to start
-    r = client.get("http://127.0.0.1:8000/plugins/get_states")
-    if r.status_code == 200:
-        result = r.json()
-    if plugin_name not in result:
-        return {"status": "failure", "message": "Plugin not installed"}
-    r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{plugin_name}")
-    while result[plugin_name]["state"] != "RUNNING":
-        time.sleep(10)
+        if sys.platform != "win32":
+            if sys.platform == "darwin":
+                popen_string = f"conda env update -f {folder_path}/environment_mac.yml"
+            else:
+                popen_string = f"conda env update -f {folder_path}/environment.yml"
+            p = subprocess.Popen(popen_string.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            p = subprocess.Popen(f"conda env update -f {folder_path}/environment.yml", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p.wait()
+        print("Environment created")
+        r = client.get(f"http://127.0.0.1:8000/plugins/reload")
+            
+        #Start plugin and wait for it to start
         r = client.get("http://127.0.0.1:8000/plugins/get_states")
         if r.status_code == 200:
             result = r.json()
-    r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{plugin_name}")
+        if plugin_name not in result:
+            return {"status": "failure", "message": "Plugin not installed"}
+        r = client.get(f"http://127.0.0.1:8000/plugins/start_plugin/{plugin_name}")
+        while result[plugin_name]["state"] != "RUNNING":
+            time.sleep(10)
+            r = client.get("http://127.0.0.1:8000/plugins/get_states")
+            if r.status_code == 200:
+                result = r.json()
+        r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{plugin_name}")
+    except Exception as e:
+        storage.store_data(f"{plugin_name}_install", {"status": "FAILURE", "message": str(e)})
+        return {"status": "failure", "message": "Plugin installation failed"}
+    print("Finish test")
 
+    storage.store_data(f"{plugin_name}_install", {"status": "COMPLETE"})
     return {"status": "success"}
 
 
@@ -91,6 +104,8 @@ async def uninstall_plugin(plugin_name: str):
         p = subprocess.Popen(f"rm -rf {folder_path}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         p = subprocess.Popen(f"rmdir /s /q {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    
+    storage.delete_data(f"{plugin_name}_install")
     # args = r.json()
     # args["plugin_name"] = plugin_name
     # dummy_plugin = Plugin(Namespace(**args))
@@ -134,7 +149,6 @@ def update_plugin(plugin_name: str, version: str):
 
 @router.get("/get_plugin_info")
 def plugin_info():
-    print(auth.logged_in)
     try:
         plugin_dict = auth.get_url("https://deepmake.com/plugins.json")
     except:

@@ -81,6 +81,7 @@ class Plugin():
 
     def __init__(self, arguments={}, plugin_name="default"):
         self.plugin_name = plugin_name
+        self.startup_notification()
         self.db = storage_db.storage_db()
         if arguments == {}:
             self.plugin = {}

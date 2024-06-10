@@ -35,6 +35,7 @@ import sqlite3
 from PySide6.QtWidgets import QApplication
 
 from routers import ui, plugin_manager, report, login
+import signal
 
 import asyncio
 from huey.exceptions import TaskException
@@ -174,7 +175,6 @@ def reload_plugin_list():
     global plugin_states
     plugin_states = {}
     for folder in os.listdir(PLUGINS_DIRECTORY):
-        print(folder)
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
                 pass
@@ -184,6 +184,15 @@ def reload_plugin_list():
                 plugin_list.append(folder)
                 if folder not in plugin_states:
                     plugin_states[folder] = "INIT"
+                    try:
+                        if retrieve_data(f"{folder}_install")["status"] == "INSTALLING":
+                            plugin_states[folder] = "INSTALLING"
+                            job = rebuild_env(folder)
+                            new_job(job)
+                    except:
+                        print(f"Plugin {folder} store")
+                        store_data(f"{folder}_install", {"status": "COMPLETE"})
+
     print(plugin_list)
     for plugin in list(plugin_states.keys()):
         if plugin not in plugin_list:
@@ -387,11 +396,11 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     conda_env = plugin_info[plugin_name]["plugin"]["env"]
     if sys.platform != "win32":
         if CONDA:
-            p = subprocess.Popen(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE)
+            p = subprocess.Popen(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             # print("GUNICORN")
             # p = subprocess.Popen(f"conda run -n {conda_env} gunicorn plugin.{plugin_name}.plugin:app --bind 127.0.0.1:{port} --worker-class uvicorn.workers.UvicornWorker".split(), stdout=subprocess.PIPE)
         else:
-            p = subprocess.Popen(f"envs\plugins\python -m uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE)
+            p = subprocess.Popen(f"envs\plugins\python -m uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
         if CONDA:
             if os.getenv('CONDA_EXE'):
@@ -403,14 +412,16 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
             if not os.path.isfile(conda_path):
                 conda_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "conda.exe")
                 activate_path = os.path.join(os.getenv('home'), "miniconda3", "Scripts", "activate.bat")
-                p = subprocess.Popen(f"{activate_path}  && {conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)           
+                p = subprocess.Popen(f"{activate_path}  && {conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)           
             else:
-                p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+                p = subprocess.Popen(f"{conda_path} run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
-            p = subprocess.Popen(f"envs\\plugins\\python.exe -m uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True)
+            p = subprocess.Popen(f"envs\\plugins\\python.exe -m uvicorn plugin.{plugin_name}.plugin:app --port {port}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        r = p.communicate(timeout=3)
-        if r[0] == b'':
+        print("communicating")
+        r = p.communicate(timeout=5)
+        print(r)
+        if r[1] != b'':
             print("Rebuilding environment")
             job = rebuild_env(plugin_name)
             new_job(job)
@@ -609,11 +620,27 @@ def get_running_jobs():
 
 @app.get("/backend/shutdown")
 def shutdown():
-    print(process_ids)
+
+    installing_plugins = []
+
+    # Stop all plugins that aren't installing
     for plugin_name in list(process_ids.keys()):
         if plugin_name != "main":
-            stop_plugin(plugin_name)
-    
+            if plugin_name == "huey":
+                stop_plugin(plugin_name)
+                continue
+            status = retrieve_data(f"{plugin_name}_install")["status"]
+            if status == "INSTALLING":
+                installing_plugins.append(plugin_name)
+            else:
+                stop_plugin(plugin_name)
+
+    for plugin_name in plugin_list:
+        status = retrieve_data(f"{plugin_name}_install")["status"]
+        if status == "INSTALLING":
+            installing_plugins.append(plugin_name)
+
+    # Remove huey
     if os.path.exists(os.path.join(storage_folder, "huey")):
         shutil.rmtree(os.path.join(storage_folder, "huey"))
     if os.path.exists(os.path.join(storage_folder, "huey_storage")):
@@ -623,7 +650,24 @@ def shutdown():
             os.remove(os.path.join(storage_folder, "huey.db"))
         except PermissionError:
             print("Failed to remove huey.db")
+    
+    # Wait for all plugins to finish installing
+    for plugin_name in installing_plugins:
+        status = retrieve_data(f"{plugin_name}_install")["status"]
+        while status == "INSTALLING":
+            sleep(5)
+            status = retrieve_data(f"{plugin_name}_install")["status"]
+        if plugin_name in process_ids.keys():
+            stop_plugin(plugin_name)
+
+    # Shutdown main 
     stop_plugin("main")
+    def handler(signum, frame):
+        print(f'Signal handler called with signal ({signum})')
+        raise OSError("Couldn't open device!")
+    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGTERM, handler)
+
     # if sys.platform != "win32":
     #     p = subprocess.Popen("pkill gunicorn".split())
     # else:
