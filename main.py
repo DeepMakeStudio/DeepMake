@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Response, Request
+from fastapi import FastAPI, HTTPException, File, UploadFile, Response, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse
 from typing import Optional, List
 from pydantic import BaseModel
@@ -187,7 +187,7 @@ def reload_plugin_list():
                     try:
                         if retrieve_data(f"{folder}_install")["status"] == "INSTALLING":
                             plugin_states[folder] = "INSTALLING"
-                            job = rebuild_env(folder)
+                            job = reinstall_plugin(folder)
                             new_job(job)
                     except:
                         print(f"Plugin {folder} store")
@@ -362,6 +362,9 @@ def huey_set_config(plugin_name: str, config: dict, port_mapping):
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
     if plugin_name not in plugin_info.keys():
         get_plugin_info(plugin_name)
+    
+    if plugin_states[plugin_name] == "REBUILDING":
+        return {"started": False, "error": "Plugin is still rebuilding environment"}
 
     if plugin_name in port_mapping.keys():
         return {"started": True, "plugin_name": plugin_name, "port": port, "warning": "Plugin already running"}
@@ -421,17 +424,21 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
         print("communicating")
         r = p.communicate(timeout=5)
         print(r)
-        if r[1] != b'':
+        if "No module named" in r[1].decode("utf-8"):
             print("Rebuilding environment")
             job = rebuild_env(plugin_name)
             new_job(job)
             del port_mapping[plugin_name]
-            plugin_states[plugin_name] = "REINSTALLING"
+            plugin_states[plugin_name] = "REBUILDING"
 
 
-            return {"started": False, "status": "Rebuilding environment", "job_id": job.id}
-    except subprocess.TimeoutExpired:
-        pass
+        return {"started": False, "status": "Rebuilding environment", "job_id": job.id}
+    except Exception as e:
+        if isinstance(e, subprocess.TimeoutExpired):
+            pass
+        else:
+            raise e
+
     pid = p.pid
     process_ids[plugin_name] = pid
     # time_running[plugin_name] = 0
@@ -439,6 +446,13 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
 
 @huey.task()
 def rebuild_env(plugin_name):
+    p = subprocess.Popen(f"conda env update -f plugin/{plugin_name}/environment.yml".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p.wait()
+    plugin_states[plugin_name] = "INIT"
+    return {"status": "success", "message": f"Rebuilding environment for {plugin_name}"}
+    
+@huey.task()
+def reinstall_plugin(plugin_name):    
     r = client.get("http://127.0.0.1:8000/plugin_manager/install/" + plugin_name)
     if r.status_code == 200:
         return r.json()
@@ -819,7 +833,6 @@ def delete_data(key: str):
     conn.close()
     return {"message": "Data deleted successfully"}
 
-@app.get("/timekeeper/start")
 @repeat_every(seconds=60)
 def timekeeper() -> None:
     print(time_running)
@@ -827,6 +840,11 @@ def timekeeper() -> None:
         time_running[plugin] += 1
         if time_running[plugin] >= 30:
             stop_plugin(plugin)
+
+@app.get("/timekeeper/start")
+async def timekeep(background_tasks: BackgroundTasks):
+    background_tasks.add_task(timekeeper)
+    return {"status": "start_timer"}
 
 @app.get("/timekeeper")
 def get_timekeeper():
