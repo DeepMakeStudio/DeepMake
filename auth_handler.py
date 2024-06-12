@@ -133,11 +133,11 @@ class AuthHandler():
                 break
 
             except requests.exceptions.ChunkedEncodingError:
-                print("Chunked Encoding Error occurred, retrying...")
+                # print("Chunked Encoding Error occurred, retrying...")
                 continue  # Continue the loop and try to reconnect from where it left off
 
             except Exception as e:
-                print(f"An error occurred: {e}")
+                # print(f"An error occurred: {e}")
                 break
 
         return data

@@ -165,7 +165,7 @@ def reload_plugin_list():
     global plugin_states
     plugin_states = {}
     for folder in os.listdir(PLUGINS_DIRECTORY):
-        print(folder)
+        # print(folder)
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
                 pass
@@ -175,7 +175,7 @@ def reload_plugin_list():
                 plugin_list.append(folder)
                 if folder not in plugin_states:
                     plugin_states[folder] = "INIT"
-    print(plugin_list)
+    # print(plugin_list)
     for plugin in list(plugin_states.keys()):
         if plugin not in plugin_list:
             if plugin in process_ids.keys():
@@ -249,7 +249,7 @@ def get_plugin_info(plugin_name: str):
     except Exception as e:
         try:
             r = retrieve_data("plugin_info")
-            print("Can't connect to Internet, using cached file")
+            # print("Can't connect to Internet, using cached file")
         except:
             r = {}
 
@@ -306,14 +306,14 @@ def get_plugin_config(plugin_name: str):
                 return {"status": "failed", "error": r.text}
         else:
             try:
-                print(f"Getting config for {plugin_name}")
-                print(f"plugin_config.{plugin_name}")
+                # print(f"Getting config for {plugin_name}")
+                # print(f"plugin_config.{plugin_name}")
                 data = retrieve_data(f"plugin_config.{plugin_name}")
-                print(data)
+                # print(data)
                 return data
             except Exception as e:
-                print(e)
-                print("Plugin config not found in DB, getting default")
+                # print(e)
+                # print("Plugin config not found in DB, getting default")
                 return get_plugin_info(plugin_name)["config"]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
@@ -438,14 +438,17 @@ def stop_plugin(plugin_name: str):
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
-    print(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
+    try:
+        print(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
+    except:
+        pass
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
     if plugin_name not in port_mapping.keys():
-        print(f"{plugin_name} not yet started, starting now")
+        # print(f"{plugin_name} not yet started, starting now")
         await start_plugin(plugin_name)
     if plugin_name not in plugin_endpoints.keys():
-        print(f"Plugin {plugin_name} not in plugin_endpoints")
+        # print(f"Plugin {plugin_name} not in plugin_endpoints")
         get_plugin_info(plugin_name)
     if endpoint not in plugin_endpoints[plugin_name].keys():
         raise HTTPException(status_code=404, detail=f"Endpoint {endpoint} does not exist for plugin {plugin_name}")
@@ -539,10 +542,13 @@ def plugin_callback(plugin_name: str, status: str):
         memory_func = available_gpu_memory
     else:
         memory_func = mac_gpu_memory
-    print(f"Callback received for plugin: {plugin_name}. Current state: {current_state}")
+    try:
+        print(f"Callback received for plugin: {plugin_name}. Current state: {current_state}")
+    except:
+        pass
     if running:
         plugin_states[plugin_name] = "RUNNING"
-        print(f"{plugin_name} is now in RUNNING state")
+        # print(f"{plugin_name} is now in RUNNING state")
         for plugin in plugin_states.keys():
             if plugin_states[plugin] == "STARTING" or len(running_jobs) > 0:
                 return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
@@ -555,20 +561,20 @@ def plugin_callback(plugin_name: str, status: str):
 
         return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
     else:
-        print(f"{plugin_name} failed to start")
+        # print(f"{plugin_name} failed to start")
         plugin_states.pop(plugin_name)
         return {"status": "error", "message": f"{plugin_name} failed to start because {status}"}
 
 @app.post("/plugin_install_callback/{plugin_name}/{progress}/{stage}")
 async def plugin_install_callback(plugin_name: str, progress: float, stage: str):
     # Handle installation progress update here
-    print(f"Installation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
+    # print(f"Installation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
     return {"status": "success", "message": f"Received installation progress for {plugin_name}"}
 
 @app.post("/plugin_uninstall_callback/{plugin_name}/{progress}/{stage}")
 async def plugin_uninstall_callback(plugin_name: str, progress: float, stage: str):
     # Handle uninstallation progress update here
-    print(f"Unistallation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
+    # print(f"Unistallation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
     return {"status": "success", "message": f"Received uninstallation progress for {plugin_name}"}
 
 @app.get("/plugins/get_jobs")
@@ -596,7 +602,8 @@ def shutdown():
         try:
             os.remove(os.path.join(storage_folder, "huey.db"))
         except PermissionError:
-            print("Failed to remove huey.db")
+            # print("Failed to remove huey.db")
+            pass
 
     stop_plugin("main")
 
@@ -613,7 +620,8 @@ async def shutdown_event():
         try:
             os.remove(os.path.join(storage_folder, "huey.db"))
         except PermissionError:
-            print("Failed to remove huey.db")
+            # print("Failed to remove huey.db")
+            pass
 
 @app.put("/job")
 def add_job(job: Job):
