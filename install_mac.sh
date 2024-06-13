@@ -212,6 +212,6 @@ fi
 
 open "https://deepmake.com/postinstall/"
 
-python "$install_path"/finalize_install.py
+~/anaconda3/bin/python "$install_path"/finalize_install.py
 
 echo "Installation complete."
