@@ -19,6 +19,12 @@ client = requests.Session()
 storage = storage_db()
 
 def handle_install(plugin_name: str):
+    print("Start test")
+    try:
+        if storage.retrieve_data(f"{plugin_name}_install")["status"] == "INSTALLING":
+            return {"status": "failure", "message": "Plugin already installing"}
+    except:
+        pass
     plugin_dict = plugin_info()
     url = plugin_dict[plugin_name]["url"]
     cur_folder = os.getcwd()
@@ -32,16 +38,17 @@ def handle_install(plugin_name: str):
             else:
                 p = subprocess.Popen(f"git clone {url} {folder_path}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             (out, err) = p.communicate()
-            print(out, err)
             if "already exists" in err.decode("utf-8"):
                 print("Plugin already installed")
             else:
                 print("Installed", plugin_name)
         else:
+            print("Downloading zip file")
             installed = False
             while not installed:
                 r = auth.get_url(url)
                 try:
+                    print("Extracting zip file")
                     z = zipfile.ZipFile(io.BytesIO(r))
                     z.extractall(plugin_folder_path)
                     installed = True
@@ -52,6 +59,12 @@ def handle_install(plugin_name: str):
             p = subprocess.Popen(f"git submodule update --init".split(), cwd=folder_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
             p = subprocess.Popen(f"git submodule update --init", cwd=folder_path, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = p.communicate()
+        err = err.decode("utf-8")
+        if err != "":
+            print(err)
+            storage.store_data(f"{plugin_name}_install", {"status": "FAILURE", "message": err})
+            return {"status": "failure", "message": "Submodule update failed", "error": err}
         os.chdir(cur_folder)
         
         if sys.platform != "win32":
@@ -62,10 +75,17 @@ def handle_install(plugin_name: str):
             p = subprocess.Popen(popen_string.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
             p = subprocess.Popen(f"conda env update -f {folder_path}/environment.yml", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p.wait()
+        (out, err) = p.communicate()
+        err = err.decode("utf-8")
+        if err != "":
+            if "WARNING" in err:
+                pass
+            else:
+                print(err)
+                storage.store_data(f"{plugin_name}_install", {"status": "FAILURE", "message": err})
+                return {"status": "failure", "message": "Environment creation failed", "error": err}
         print("Environment created")
         r = client.get(f"http://127.0.0.1:8000/plugins/reload")
-            
         #Start plugin and wait for it to start
         r = client.get("http://127.0.0.1:8000/plugins/get_states")
         if r.status_code == 200:
@@ -81,7 +101,7 @@ def handle_install(plugin_name: str):
         r = client.get(f"http://127.0.0.1:8000/plugins/stop_plugin/{plugin_name}")
     except Exception as e:
         storage.store_data(f"{plugin_name}_install", {"status": "FAILURE", "message": str(e)})
-        return {"status": "failure", "message": "Plugin installation failed"}
+        return {"status": "failure", "message": "Plugin installation failed", "error": str(e)}
     print("Finish test")
 
     storage.store_data(f"{plugin_name}_install", {"status": "COMPLETE"})
@@ -91,7 +111,6 @@ def handle_install(plugin_name: str):
 @router.get("/install/{plugin_name}")
 async def install_plugin(plugin_name: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(handle_install, plugin_name)
-    
     return {"status": "installing"}
 
 @router.get("/uninstall/{plugin_name}")

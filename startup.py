@@ -4,17 +4,17 @@ import subprocess
 import sys
 import requests
 import time
+import uuid
 
 client = requests.Session()
 
 if __name__ == "__main__":
     if sys.platform != "win32":
-        main_proc = subprocess.Popen(f"uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info".split())
+        main_proc = subprocess.Popen(f"gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --access-logfile - --pid gunicorn_pid".split())
     else:
-        main_proc = subprocess.Popen(f"uvicorn main:app --host 127.0.0.1 --port 8000 --log-level info", shell=True)
+        main_proc = subprocess.Popen(f"gunicorn main:app --worker-class uvicorn.workers.UvicornWorker --access-logfile - --pid gunicorn_pid", shell=True)
     
-    # pid = main_proc.pid
     time.sleep(3)
-    r = client.get(f"http://127.0.0.1:8000/frontend/start/AE")   
-    # r = client.get(f"http://127.0.0.1:8000/get_main_pid/{pid}")
-# uvicorn.run("main:app", host="127.0.0.1", port=8000, log_level="info")
+
+    frontend_id = str(uuid.uuid4())
+    r = client.get(f"http://127.0.0.1:8000/frontend/start/{frontend_id}")   

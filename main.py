@@ -117,7 +117,10 @@ frontends = []
 plugin_info = {}
 
 port_mapping = {"main": 8000}
+# gunicorn_pid = subprocess.check_output("ps -C gunicorn fch -o pid".split()).decode("utf-8").split("\n")[0]
+#uvicorn_pid = subprocess.check_output("ps -C uvicorn fch -o pid".split()).decode("utf-8").split("\n")[0]
 process_ids = {"main": os.getpid()}
+#process_ids = {"main": os.getpid()}
 plugin_endpoints = {}
 plugin_memory = {}
 PLUGINS_DIRECTORY = "plugin"
@@ -139,7 +142,16 @@ def get_main_pid(pid):
 def startup():
     reload_plugin_list()
     init_db()  # Initialize the database
-
+    for plugin_name in plugin_list:
+        try:
+            install_status = retrieve_data(f"{plugin_name}_install")
+            if install_status["status"] == "INSTALLING" or (install_status["status"] == "FAILURE" and "interrupt" in install_status["message"].lower()):
+                plugin_states[plugin_name] = "INSTALLING"
+                job = reinstall_plugin(plugin_name)
+                new_job(job)
+        except:
+            print(f"Plugin {plugin_name} store")
+            store_data(f"{plugin_name}_install", {"status": "COMPLETE"})
     if sys.platform != "win32":
         p = subprocess.Popen("huey_consumer.py main.huey".split())
     else:
@@ -184,14 +196,7 @@ def reload_plugin_list():
                 plugin_list.append(folder)
                 if folder not in plugin_states:
                     plugin_states[folder] = "INIT"
-                    try:
-                        if retrieve_data(f"{folder}_install")["status"] == "INSTALLING":
-                            plugin_states[folder] = "INSTALLING"
-                            job = reinstall_plugin(folder)
-                            new_job(job)
-                    except:
-                        print(f"Plugin {folder} store")
-                        store_data(f"{folder}_install", {"status": "COMPLETE"})
+                    
 
     print(plugin_list)
     for plugin in list(plugin_states.keys()):
@@ -400,8 +405,8 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     if sys.platform != "win32":
         if CONDA:
             p = subprocess.Popen(f"conda run -n {conda_env} uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            # print("GUNICORN")
-            # p = subprocess.Popen(f"conda run -n {conda_env} gunicorn plugin.{plugin_name}.plugin:app --bind 127.0.0.1:{port} --worker-class uvicorn.workers.UvicornWorker".split(), stdout=subprocess.PIPE)
+            #print("GUNICORN")
+            #p = subprocess.Popen(f"conda run -n {conda_env} gunicorn plugin.{plugin_name}.plugin:app --bind 127.0.0.1:{port} --worker-class uvicorn.workers.UvicornWorker".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
             p = subprocess.Popen(f"envs\plugins\python -m uvicorn plugin.{plugin_name}.plugin:app --port {port}".split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     else:
@@ -432,7 +437,7 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
             plugin_states[plugin_name] = "REBUILDING"
 
 
-        return {"started": False, "status": "Rebuilding environment", "job_id": job.id}
+            return {"started": False, "status": "Rebuilding environment", "job_id": job.id}
     except Exception as e:
         if isinstance(e, subprocess.TimeoutExpired):
             pass
@@ -443,6 +448,13 @@ async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001,
     process_ids[plugin_name] = pid
     # time_running[plugin_name] = 0
     return {"started": True, "plugin_name": plugin_name, "port": port}
+
+@app.get("/plugins/install_status/{plugin_name}")
+def get_install_status(plugin_name: str):
+    try:
+        return retrieve_data(f"{plugin_name}_install")
+    except:
+        return {"status": "Not Found"}
 
 @huey.task()
 def rebuild_env(plugin_name):
@@ -589,6 +601,8 @@ def plugin_callback(plugin_name: str, status: str):
         print(f"{plugin_name} is now in RUNNING state")
         for plugin in plugin_states.keys():
             if plugin_states[plugin] == "STARTING" or len(running_jobs) > 0:
+                time_running[plugin_name] = 0
+
                 return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
         initial_memory = retrieve_data(f"{plugin_name}_available")["memory"]
         memory_left = memory_func()    
@@ -675,18 +689,13 @@ def shutdown():
             stop_plugin(plugin_name)
 
     # Shutdown main 
-    stop_plugin("main")
-    def handler(signum, frame):
-        print(f'Signal handler called with signal ({signum})')
-        raise OSError("Couldn't open device!")
-    signal.signal(signal.SIGINT, handler)
-    signal.signal(signal.SIGTERM, handler)
+    #stop_plugin("main")
 
-    # if sys.platform != "win32":
-    #     p = subprocess.Popen("pkill gunicorn".split())
-    # else:
-    #     p = subprocess.Popen("pkill gunicorn", shell=True)
-    # p.wait()
+    f = open("gunicorn_pid", "r")
+    gunicorn_pid = f.read()
+    f.close()
+    os.kill(int(gunicorn_pid), signal.SIGINT)
+    
 
 @app.get("/frontend/start/{frontend_name}")
 def start_frontend(frontend_name: str):
