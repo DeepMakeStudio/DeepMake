@@ -11,7 +11,9 @@ from PIL import Image
 from tqdm import tqdm
 import shutil
 import threading
+import traceback
 import storage_db
+import pickle 
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -74,6 +76,18 @@ def store_multiple(data_list, func, img_ids=None):
 def fetch_multiple(func, id_list):
     return [func(img_id) for img_id in id_list]
 
+def custom_exception_handler(exc_type, exc_value, exc_traceback):
+
+    # Handle the exception here
+    # You can print the exception, log it, or take any other desired action
+    print(f"An unhandled exception occurred: {exc_type.__name__}")
+    print(f"Exception message: {exc_value}")
+    print(f"Traceback: {exc_traceback}")
+    # print("bam "  + ''.join(traceback.format_exception(exc_traceback)))
+
+    exception_dict = {"exc_type": exc_type.__name__, "traceback": ''.join(traceback.format_exception(exc_value))}
+    r = requests.put("http://127.0.0.1:8000/backend/exception_callback/", json=exception_dict)
+
 class Plugin():
     """
     Generic plugin class
@@ -117,7 +131,15 @@ class Plugin():
             print(f"{stage}: {progress*100}% complete")
         else:
             print(f"{stage}: Progress not available")
+        
+    def startup_notification(self):
 
+        callback_url = f"http://localhost:8000/plugin/start_callback/{self.plugin_name}"
+        try:
+            response = requests.get(callback_url)
+            print("Response from main system:", response.json())  # Print the response content
+        except:
+            print("Failed to notify the main system. Ensure it's running.")
 
     def download_model(self, model_url, save_path, progress_callback=None):
         """Download a model with a progress bar and report progress in 5% increments."""

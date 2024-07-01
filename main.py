@@ -130,6 +130,18 @@ def get_main_pid(pid):
     process_ids["main"] = int(pid)
     return {"status": "success"}
 
+@app.put("/backend/exception_callback")
+def exception_callback(json_data: dict):
+    exception_type = json_data["exc_type"]
+    exception_class = eval(exception_type)()
+
+    setattr(exception_class, "message", json_data["traceback"])
+
+
+    # sentry_sdk.capture_message(json_data)
+    sentry_sdk.capture_exception(exception_class)
+    return {"status": "success"}
+
 @app.on_event("startup")
 def startup():
     reload_plugin_list()
