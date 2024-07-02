@@ -3,6 +3,8 @@ from fastapi.responses import RedirectResponse
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
+# from fastapi.logger import logger
+
 import shutil
 import time
 import re
@@ -32,9 +34,9 @@ from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
 from PySide6.QtWidgets import QApplication
-
+import uvicorn
 from routers import ui, plugin_manager, report, login
-
+import logging
 import asyncio
 from huey.exceptions import TaskException
 from fastapi import Depends
@@ -43,6 +45,7 @@ CONDA = "MiniConda3"
 
 def get_id(): # return md5 hash of uuid.getnode()
     return md5(str(uuid.getnode()).encode()).hexdigest()
+
 
 sentry_sdk.init(
     dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
@@ -117,6 +120,9 @@ plugin_endpoints = {}
 plugin_memory = {}
 PLUGINS_DIRECTORY = "plugin"
 
+logger = logging.getLogger("uvicorn.error")
+logger.setLevel(logging.DEBUG)
+
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
     if img_data == EmptyData:
@@ -144,6 +150,8 @@ def startup():
 
     process_ids["huey"] = pid
 
+    
+
 def init_db():
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
@@ -165,7 +173,6 @@ def reload_plugin_list():
     global plugin_states
     plugin_states = {}
     for folder in os.listdir(PLUGINS_DIRECTORY):
-        print(folder)
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
                 pass
@@ -175,7 +182,6 @@ def reload_plugin_list():
                 plugin_list.append(folder)
                 if folder not in plugin_states:
                     plugin_states[folder] = "INIT"
-    print(plugin_list)
     for plugin in list(plugin_states.keys()):
         if plugin not in plugin_list:
             if plugin in process_ids.keys():
@@ -246,12 +252,14 @@ def get_plugin_info(plugin_name: str):
     try:
         r = auth.get_url("https://deepmake.com/plugins.json")
         store_data("plugin_info", r)
+        logger.info("Retrieved plugin info")
     except Exception as e:
         try:
             r = retrieve_data("plugin_info")
-            print("Can't connect to Internet, using cached file")
+            logger.warning("Can't connect to Internet, using cached file")
         except:
             r = {}
+            logger.warning("Can't connect to Internet and can't retrieve subscription details")
 
     json_exists = True
     try:
@@ -264,7 +272,6 @@ def get_plugin_info(plugin_name: str):
             plugin = importlib.import_module(f"plugin.{plugin_name}.config", package = f'{plugin_name}.config')
             plugin_info[plugin_name] = {"plugin": plugin.plugin, "config": plugin.config, "endpoints": plugin.endpoints}
             plugin_endpoints[plugin_name] = plugin.endpoints
-            # print(plugin_info[plugin_name]["plugin"]["memory"])
             if json_exists:
                 initial_value = int(r[plugin_name]["vram"].split(" ")[0])
                 mult = 1
@@ -416,17 +423,22 @@ def stop_plugin(plugin_name: str):
             plugin_states[plugin_name] = "STOPPED"
         
     return {"status": "Success", "description": f"{plugin_name} stopped"}
+
+@app.get("/test/")
+def test():
+    logger.info("Test log")
+    return {"status": "success"}
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
-    print(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
+    logger.info(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
     if plugin_name not in port_mapping.keys():
-        print(f"{plugin_name} not yet started, starting now")
+        logger.info(f"{plugin_name} not yet started, starting now")
         await start_plugin(plugin_name)
     if plugin_name not in plugin_endpoints.keys():
-        print(f"Plugin {plugin_name} not in plugin_endpoints")
+        logger.info(f"Plugin {plugin_name} not in plugin_endpoints. Getting info.")
         get_plugin_info(plugin_name)
     if endpoint not in plugin_endpoints[plugin_name].keys():
         raise HTTPException(status_code=404, detail=f"Endpoint {endpoint} does not exist for plugin {plugin_name}")
@@ -512,10 +524,10 @@ def plugin_callback(plugin_name: str, status: str):
         memory_func = available_gpu_memory
     else:
         memory_func = mac_gpu_memory
-    print(f"Callback received for plugin: {plugin_name}. Current state: {current_state}")
+    logger.info(f"Callback received for plugin: {plugin_name}. Current state: {current_state}")
     if running:
         plugin_states[plugin_name] = "RUNNING"
-        print(f"{plugin_name} is now in RUNNING state")
+        logger.info(f"{plugin_name} is now in RUNNING state")
         for plugin in plugin_states.keys():
             if plugin_states[plugin] == "STARTING" or len(running_jobs) > 0:
                 return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
@@ -528,7 +540,7 @@ def plugin_callback(plugin_name: str, status: str):
 
         return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
     else:
-        print(f"{plugin_name} failed to start")
+        logger.error(f"{plugin_name} failed to start")
         plugin_states.pop(plugin_name)
         return {"status": "error", "message": f"{plugin_name} failed to start because {status}"}
 
@@ -569,7 +581,7 @@ def shutdown():
         try:
             os.remove(os.path.join(storage_folder, "huey.db"))
         except PermissionError:
-            print("Failed to remove huey.db")
+            logger.error("Failed to remove huey.db")
 
     stop_plugin("main")
 
@@ -586,11 +598,11 @@ async def shutdown_event():
         try:
             os.remove(os.path.join(storage_folder, "huey.db"))
         except PermissionError:
-            print("Failed to remove huey.db")
+            logger.error("Failed to remove huey.db")
 
 @app.put("/job")
 def add_job(job: Job):
-    print("Received Job Payload:", job.dict())  # Print the received payload
+    logger.info(f"Received Job Payload: {job.dict()}")
     new_job(job)
     return {"message": f"Job {job.message_id} added"}
 
@@ -641,9 +653,7 @@ def get_job(job_id: str):
     except Exception as e:
         if isinstance(e, KeyError):
             return {"status": "Job not found"}
-    # print("moving job")
     move_job(job_id)
-    # print("found job")
     try:
         result = job()
     except TaskException as e:
