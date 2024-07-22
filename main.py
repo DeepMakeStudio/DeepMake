@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Response, Request
+from fastapi import FastAPI, HTTPException, File, UploadFile, Response, Request, Query
 from fastapi.responses import RedirectResponse
 from typing import Optional, List
 from pydantic import BaseModel
@@ -32,6 +32,8 @@ from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
 from PySide6.QtWidgets import QApplication
+import cv2
+
 
 from routers import ui, plugin_manager, report, login
 
@@ -146,6 +148,14 @@ def init_db():
         CREATE TABLE IF NOT EXISTS key_value_store (
             key TEXT PRIMARY KEY,
             value TEXT
+        )
+    """)
+        # Add table for video metadata
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS video_metadata (
+            video_id TEXT PRIMARY KEY,
+            filename TEXT,
+            upload_time TEXT
         )
     """)
     conn.commit()
@@ -667,6 +677,86 @@ async def store_multiple_images(data):
     storage.put_data(img_id,img_data)
     storage.put_data(shape_id, np.array(shape).tobytes())
     return img_id
+
+@app.post("/upload_video/")
+async def upload_video(file: UploadFile = File(...)):
+    video_id = str(uuid.uuid4())
+    video_path = os.path.join(storage_folder, f"{video_id}.mp4")
+
+    with open(video_path, "wb") as video_file:
+        shutil.copyfileobj(file.file, video_file)
+
+    # Store video metadata in database
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO video_metadata (video_id, filename, upload_time) VALUES (?, ?, ?)",
+                   (video_id, file.filename, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
+    try:
+        extract_frames(video_path, video_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing video: {str(e)}")
+
+    return {"status": "Success", "video_id": video_id}
+
+# Function to extract frames from video
+def extract_frames(video_path: str, video_id: str):
+    cap = cv2.VideoCapture(video_path)
+    pts_to_frame_number = {}
+    frames = []
+    keyframes = []
+
+    frame_number = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        pts = cap.get(cv2.CAP_PROP_POS_MSEC)
+        pts_to_frame_number[pts] = frame_number
+
+        if frame_number % 30 == 0:  # Adjust the condition to store keyframes
+            keyframes.append(frame)
+        elif frame_number < 30:  # Keep the first 30 frames in memory
+            frames.append(frame)
+
+        frame_number += 1
+
+    cap.release()
+
+    frames_array = np.array(frames)
+    keyframes_array = np.array(keyframes)
+    np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=frames_array, keyframes=keyframes_array, pts_to_frame_number=pts_to_frame_number)
+
+# Function to get video frames by range
+@app.get("/video/{video_id}/frames/")
+async def get_video_frames(video_id: str, start_frame: int = Query(0), end_frame: int = Query(30)):
+    npz_path = os.path.join(storage_folder, f"{video_id}.npz")
+
+    if not os.path.exists(npz_path):
+        print(f"Video file {npz_path} does not exist")
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    print(f"Loading frames from {npz_path}")
+
+    try:
+        npz_data = np.load(npz_path, allow_pickle=True)
+    except Exception as e:
+        print(f"Error loading npz file: {e}")
+        raise HTTPException(status_code=500, detail="Error loading video frames")
+
+    frames = npz_data["frames"]
+    keyframes = npz_data["keyframes"]
+    pts_to_frame_number = npz_data["pts_to_frame_number"].item()
+
+    # Fetch frames by range
+    requested_frames = frames[start_frame:end_frame]
+
+    print(f"Successfully loaded {len(requested_frames)} frames from {start_frame} to {end_frame}")
+
+    return {"frames": requested_frames.tolist(), "pts_to_frame_number": pts_to_frame_number}
+
 
 @app.put("/data/store/{key}")
 def store_data(key: str, item: dict):
