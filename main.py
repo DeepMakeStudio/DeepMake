@@ -691,7 +691,7 @@ async def get_img(img_id: str):
     return Response(content=image_bytes, media_type="image/png")
 
 @app.post("/image/upload")
-async def upload_img(file: UploadFile = File(...)):
+async def upload_img(file: UploadFile):
     # serialized_image = await serialize_image(file)
     image_id = await store_image(file)
     return {"status": "Success", "image_id": image_id}
