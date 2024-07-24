@@ -38,6 +38,21 @@ from routers import ui, plugin_manager, report, login
 import asyncio
 from huey.exceptions import TaskException
 from fastapi import Depends
+from fastapi.middleware.cors import CORSMiddleware
+
+origins = [
+    "http://deepmake.com",
+    "https://deepmake.com",
+    "http://localhost",
+    "http://localhost:8080",
+    "http://127.0.0.1",
+    "http://127.0.0.1:8080",
+]
+
+origin_regexes = [
+    "http://.*\.deepmake\.com",
+    "https://.*\.deepmake\.com",
+]
 
 CONDA = "MiniConda3"
 
@@ -85,6 +100,16 @@ storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'h
 huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_origin_regex=origin_regexes,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(ui.router, tags=["ui"], prefix="/ui")
 app.include_router(plugin_manager.router, tags=["plugin_manager"], prefix="/plugin_manager")
 app.include_router(report.router, tags=["report"], prefix="/report")
