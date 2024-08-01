@@ -698,7 +698,7 @@ async def store_multiple_images(data):
     storage.put_data(shape_id, np.array(shape).tobytes())
     return img_id
 
-@app.post("/upload_video/")
+@app.post("/video/upload/", tags=["video"])
 async def upload_video(request: Request, file: UploadFile = File(...)):
     try:
         # Print request headers for debugging
@@ -789,7 +789,7 @@ def huey_enqueue_process_frames(video_path: str, video_id: str):
     loop.run_until_complete(extract_frames(video_path, video_id))
     loop.close()
 
-@app.get("/video/stream/{video_id}")
+@app.get("/video/stream/{video_id}", tags=["video"])
 def stream_video(video_id: str):
     video_path = os.path.join(storage_folder, f"{video_id}_masked.mp4")
     if not os.path.exists(video_path):
@@ -807,7 +807,7 @@ def stream_video(video_id: str):
     return StreamingResponse(iterfile(), media_type="video/mp4")
 
 
-@app.get("/video/{video_id}/pts/")
+@app.get("/video/pts/{video_id}/", tags=["video"])
 async def get_pts(video_id: str):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
@@ -823,7 +823,7 @@ async def get_pts(video_id: str):
     return {"pts_to_frame_number": pts_to_frame_number}
 
 
-@app.get("/video/{video_id}/frames/")
+@app.get("/video/frames/{video_id}/", tags=["video"])
 async def get_video_frames(video_id: str, start_frame: int = Query(0), end_frame: int = Query(None)):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
@@ -852,7 +852,7 @@ async def get_video_frames(video_id: str, start_frame: int = Query(0), end_frame
     return {"frames": requested_frames.tolist(), "pts_to_frame_number": filtered_pts_to_frame_number, "metadata": filtered_metadata}
 
 
-@app.get("/video/{video_id}/mask_frames/")
+@app.get("/video/mask_frames/{video_id}/", tags=["video"])
 async def get_mask_frames(video_id: str, start_frame: int = Query(0), end_frame: int = Query(30)):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
@@ -870,7 +870,7 @@ async def get_mask_frames(video_id: str, start_frame: int = Query(0), end_frame:
 
     return {"metadata": filtered_metadata}
 
-@app.post("/plugins/video/set_mask/{video_id}")
+@app.post("/video/set_mask/{video_id}", tags=["video"])
 async def set_mask(video_id: str, masks: dict):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
@@ -893,7 +893,7 @@ async def set_mask(video_id: str, masks: dict):
     return {"status": "Success"}
 
 # Get keyframes and their effect settings
-@app.get("/video/{video_id}/keyframes/")
+@app.get("/video/keyframes/{video_id}/", tags=["video"])
 async def get_keyframes(video_id: str):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
@@ -909,7 +909,7 @@ async def get_keyframes(video_id: str):
     #effect_settings = get_effect_settings_for_keyframes(video_id)
     #return {"keyframes": keyframes.tolist(), "effect_settings": effect_settings}
 
-@app.get("/video/{video_id}/export_masks/")
+@app.get("/video/export_masks/{video_id}/", tags=["video"])
 async def export_masks(video_id: str):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
@@ -973,7 +973,7 @@ async def export_masks(video_id: str):
 
 
 # Import masks from a video or image sequence
-@app.post("/video/{video_id}/import_masks/")
+@app.post("/video/import_masks/{video_id}/", tags=["video"])
 async def import_masks(video_id: str, masks: List[UploadFile]):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
