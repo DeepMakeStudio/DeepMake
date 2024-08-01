@@ -42,6 +42,21 @@ from routers import ui, plugin_manager, report, login
 import asyncio
 from huey.exceptions import TaskException
 from fastapi import Depends
+from fastapi.middleware.cors import CORSMiddleware
+
+origins = [
+    "http://deepmake.com",
+    "https://deepmake.com",
+    "http://localhost",
+    "http://localhost:8080",
+    "http://127.0.0.1",
+    "http://127.0.0.1:8080",
+]
+
+origin_regexes = [
+    "http://.*\.deepmake\.com",
+    "https://.*\.deepmake\.com",
+]
 
 CONDA = "MiniConda3"
 
@@ -57,8 +72,15 @@ sentry_sdk.init(
         HueyIntegration(),
     ],
 )
-sentry_sdk.set_user({"id": get_id()})
+user = {"id": get_id()}
 sentry_sdk.set_tag("platform", sys.platform)
+sentry_sdk.set_tag("os", sys.platform)
+if auth.logged_in:
+    user["email"] = auth.username
+    user_info = auth.get_user_info()
+    if "id" in user_info.keys():
+        user["acct_id"] = user_info["id"]
+sentry_sdk.set_user(user)
 
 sentry_sdk.capture_message('Backend started')
 
@@ -82,6 +104,15 @@ storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'h
 huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(ui.router, tags=["ui"], prefix="/ui")
 app.include_router(plugin_manager.router, tags=["plugin_manager"], prefix="/plugin_manager")
 app.include_router(report.router, tags=["report"], prefix="/report")
@@ -113,8 +144,6 @@ process_ids = {}
 plugin_endpoints = {}
 plugin_memory = {}
 PLUGINS_DIRECTORY = "plugin"
-
-print(auth.logged_in)
 
 def fetch_image(img_id):
     img_data = storage.peek_data(img_id)
@@ -164,7 +193,7 @@ def reload_plugin_list():
     global plugin_states
     plugin_states = {}
     for folder in os.listdir(PLUGINS_DIRECTORY):
-        print(folder)
+        # print(folder)
         if os.path.isdir(os.path.join(PLUGINS_DIRECTORY, folder)):
             if folder in plugin_list:
                 pass
@@ -174,7 +203,7 @@ def reload_plugin_list():
                 plugin_list.append(folder)
                 if folder not in plugin_states:
                     plugin_states[folder] = "INIT"
-    print(plugin_list)
+    # print(plugin_list)
     for plugin in list(plugin_states.keys()):
         if plugin not in plugin_list:
             if plugin in process_ids.keys():
@@ -274,7 +303,7 @@ def get_plugin_info(plugin_name: str):
     except Exception as e:
         try:
             r = retrieve_data("plugin_info")
-            print("Can't connect to Internet, using cached file")
+            # print("Can't connect to Internet, using cached file")
         except:
             r = {}
 
@@ -314,13 +343,32 @@ def get_plugin_info(plugin_name: str):
 
 @app.get("/plugins/get_config/{plugin_name}")
 def get_plugin_config(plugin_name: str):
-    if plugin_name in plugin_list: 
+    if plugin_name in plugin_list:
+        sleep = 0
+        # while plugin_states[plugin_name] != "RUNNING":
+        #     start_plugin(plugin_name)
+        #     time.sleep(5)
+        #     sleep += 5
+        #     if sleep > 120:
+        #         return {"status": "failed", "error": "Plugin too slow to start"}
         if plugin_name in port_mapping.keys():
             port = port_mapping[plugin_name]
             r = client.get("http://127.0.0.1:" + port + "/get_config")
-            return r.json()
+            if r.status_code == 200:
+                return r.json()
+            else:
+                return {"status": "failed", "error": r.text}
         else:
-            raise HTTPException(status_code=404, detail="Plugin must be running to check config")
+            try:
+                # print(f"Getting config for {plugin_name}")
+                # print(f"plugin_config.{plugin_name}")
+                data = retrieve_data(f"plugin_config.{plugin_name}")
+                # print(data)
+                return data
+            except Exception as e:
+                # print(e)
+                # print("Plugin config not found in DB, getting default")
+                return get_plugin_info(plugin_name)["config"]
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
 
@@ -340,7 +388,12 @@ def set_plugin_config(plugin_name: str, config: dict):
             # store_data(f"{plugin_name}_model_memory", {"memory": int(new_model_memory)})
             return {"job_id": job.id}
         else:
-            raise HTTPException(status_code=404, detail="Plugin must be running to change config")
+            try:
+                original_config = retrieve_data(f"plugin_config.{self.plugin_name}")
+            except:
+                original_config = get_plugin_info(plugin_name)["config"]
+            original_config.update(config)
+            store_data(f"plugin_config.{plugin_name}", original_config)
     else:
         raise HTTPException(status_code=404, detail="Plugin not found")
     
@@ -348,8 +401,10 @@ def set_plugin_config(plugin_name: str, config: dict):
 def huey_set_config(plugin_name: str, config: dict, port_mapping):
     port = port_mapping[plugin_name]
     r = client.put(f"http://127.0.0.1:{port}/set_config", json= config)
-    return r.json()
-            # after_memory = memory_func()
+    if r.status_code == 200:
+        return r.json()
+    else:
+        raise TaskException(f"Failed to set config for {plugin_name}")
 
 @app.get("/plugins/start_plugin/{plugin_name}")
 async def start_plugin(plugin_name: str, port: int = None, min_port: int = 1001, max_port: int = 65534):
@@ -437,14 +492,17 @@ def stop_plugin(plugin_name: str):
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
 async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
-    print(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
+    try:
+        print(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
+    except:
+        pass
     if plugin_name not in plugin_list:
         raise HTTPException(status_code=404, detail=f"Plugin {plugin_name} not found")
     if plugin_name not in port_mapping.keys():
-        print(f"{plugin_name} not yet started, starting now")
+        # print(f"{plugin_name} not yet started, starting now")
         await start_plugin(plugin_name)
     if plugin_name not in plugin_endpoints.keys():
-        print(f"Plugin {plugin_name} not in plugin_endpoints")
+        # print(f"Plugin {plugin_name} not in plugin_endpoints")
         get_plugin_info(plugin_name)
     if endpoint not in plugin_endpoints[plugin_name].keys():
         raise HTTPException(status_code=404, detail=f"Endpoint {endpoint} does not exist for plugin {plugin_name}")
@@ -471,11 +529,17 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
 
 @huey.task()
 def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
-    result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+    result = client.get("http://127.0.0.1:8000/plugins/get_states") # Calls REST instead of directly because of missing global due to threading
+    if result.status_code == 200:
+        result = result.json()
+    else:
+        raise HTTPException(status_code=500, detail="Failed to get plugin states")
     counter = 0
     while result[plugin_name]["state"] != "RUNNING":
         sleep(10)
-        result = client.get("http://127.0.0.1:8000/plugins/get_states").json()
+        result = client.get("http://127.0.0.1:8000/plugins/get_states")
+        if result.status_code == 200:
+            result = result.json()
         counter += 1
         if counter > 10:
             raise HTTPException(status_code=504, detail=f"Plugin {plugin_name} failed to start")
@@ -499,7 +563,11 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
                 inputs_string += f"&{input}={str(json_data[input])}"
 
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
-        response = client.get(url).json()
+        response = client.get(url, timeout=240)
+        if response.status_code == 200:
+            response = response.json()
+        else:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
     elif endpoint['method'] == 'PUT':
         inputs_string = ""
         for ct, input in enumerate([input for input in json_data.keys() if "optional=true" in endpoint['inputs'][input]]):
@@ -508,7 +576,11 @@ def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_ma
             else:
                 inputs_string += f"&{input}={str(json_data[input])}"
         url = f"http://127.0.0.1:{port}/{endpoint['call']}/{inputs_string}"
-        response = client.put(url, json=json_data, timeout=240).json()
+        response = client.put(url, json=json_data, timeout=240)
+        if response.status_code == 200:
+            response = response.json()
+        else:
+            raise HTTPException(status_code=response.status_code, detail=response.text)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported method: {endpoint['method']}")
 
@@ -531,10 +603,13 @@ def plugin_callback(plugin_name: str, status: str):
         memory_func = available_gpu_memory
     else:
         memory_func = mac_gpu_memory
-    print(f"Callback received for plugin: {plugin_name}. Current state: {current_state}")
+    try:
+        print(f"Callback received for plugin: {plugin_name}. Current state: {current_state}")
+    except:
+        pass
     if running:
         plugin_states[plugin_name] = "RUNNING"
-        print(f"{plugin_name} is now in RUNNING state")
+        # print(f"{plugin_name} is now in RUNNING state")
         for plugin in plugin_states.keys():
             if plugin_states[plugin] == "STARTING" or len(running_jobs) > 0:
                 return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
@@ -547,20 +622,20 @@ def plugin_callback(plugin_name: str, status: str):
 
         return {"status": "success", "message": f"{plugin_name} is now in RUNNING state"}
     else:
-        print(f"{plugin_name} failed to start")
+        # print(f"{plugin_name} failed to start")
         plugin_states.pop(plugin_name)
         return {"status": "error", "message": f"{plugin_name} failed to start because {status}"}
 
 @app.post("/plugin_install_callback/{plugin_name}/{progress}/{stage}")
 async def plugin_install_callback(plugin_name: str, progress: float, stage: str):
     # Handle installation progress update here
-    print(f"Installation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
+    # print(f"Installation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
     return {"status": "success", "message": f"Received installation progress for {plugin_name}"}
 
 @app.post("/plugin_uninstall_callback/{plugin_name}/{progress}/{stage}")
 async def plugin_uninstall_callback(plugin_name: str, progress: float, stage: str):
     # Handle uninstallation progress update here
-    print(f"Unistallation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
+    # print(f"Unistallation progress for {plugin_name}: {progress}% complete. Current stage: {stage}")
     return {"status": "success", "message": f"Received uninstallation progress for {plugin_name}"}
 
 @app.get("/plugins/get_jobs")
@@ -588,7 +663,8 @@ def shutdown():
         try:
             os.remove(os.path.join(storage_folder, "huey.db"))
         except PermissionError:
-            print("Failed to remove huey.db")
+            # print("Failed to remove huey.db")
+            pass
 
     stop_plugin("main")
 
@@ -605,7 +681,8 @@ async def shutdown_event():
         try:
             os.remove(os.path.join(storage_folder, "huey.db"))
         except PermissionError:
-            print("Failed to remove huey.db")
+            # print("Failed to remove huey.db")
+            pass
 
 @app.put("/job")
 def add_job(job: Job):
@@ -675,7 +752,7 @@ async def get_img(img_id: str):
     return Response(content=image_bytes, media_type="image/png")
 
 @app.post("/image/upload")
-async def upload_img(file: UploadFile = File(...)):
+async def upload_img(file: UploadFile):
     # serialized_image = await serialize_image(file)
     image_id = await store_image(file)
     return {"status": "Success", "image_id": image_id}
