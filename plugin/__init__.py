@@ -11,7 +11,6 @@ from PIL import Image
 from tqdm import tqdm
 import shutil
 import threading
-import storage_db
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -74,6 +73,25 @@ def store_multiple(data_list, func, img_ids=None):
 def fetch_multiple(func, id_list):
     return [func(img_id) for img_id in id_list]
 
+def get_video(video_id: str):
+    npz_path = os.path.join(storage_folder, f"{video_id}.npz")
+
+    try:
+        npz_data = np.load(npz_path, allow_pickle=True)
+    except Exception as e:
+        print(f"Error loading npz file: {e}")
+        raise HTTPException(status_code=500, detail="Error loading video frames")
+    return npz_data
+
+def save_new_metadata(npz_data, video_id, tracking_dict):
+    if npz_data.get("metadata") is None:
+        metadata = tracking_dict
+    else:
+        metadata = npz_data["metadata"]
+        metadata = metadata[()]
+        metadata.update(tracking_dict)
+    np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=npz_data["frames"], keyframes=npz_data["keyframes"], pts_to_frame_number=npz_data["pts_to_frame_number"], metadata=metadata)
+
 class Plugin():
     """
     Generic plugin class
@@ -81,7 +99,6 @@ class Plugin():
 
     def __init__(self, arguments={}, plugin_name="default"):
         self.plugin_name = plugin_name
-        self.db = storage_db.storage_db()
         if arguments == {}:
             self.plugin = {}
             self.config = {}
@@ -90,9 +107,7 @@ class Plugin():
             self.plugin = arguments.plugin
             self.config = arguments.config
             self.endpoints = arguments.endpoints
-            config = self.db.retrieve_data(f"plugin_config.{self.plugin_name}")
-            if config:
-                self.config = config
+            
 
         # Create a plugin-specific storage path
         self.plugin_storage_path = os.path.join(storage_folder, self.plugin_name)
@@ -107,9 +122,10 @@ class Plugin():
     
     def set_config(self, update: dict):
         self.config.update(update) # TODO: Validate config dict are all valid keys
-        self.db.store_data(f"plugin_config.{self.plugin_name}", self.config)
-        if "model_name" in update:
+        if "model_name" in update or "scheduler" in update or "loras" in update or "inverters" in update:
             self.set_model()
+            # if response["status"] == "Failed":
+            #     return response
         return self.config
 
     def progress_callback(self, progress, stage):
