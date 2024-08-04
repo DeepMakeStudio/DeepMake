@@ -215,11 +215,19 @@ async def serialize_image(image):
     img_data = image.decode()
     return img_data
 
-async def store_image(data):
-    img_data = await data.read()
-    img_id = str(uuid.uuid4())
-    storage.put_data(img_id,img_data)
+def store_image(img_data, img_id=None):
+    if img_id is None:
+      img_id = str(uuid.uuid4())
+    #if not isinstance(img_data, bytes):
+        #raise HTTPException(status_code=400, detail=f"Data must be stored in bytes")
+    storage.put_data(img_id, img_data)
     return img_id
+
+#async def store_image(data):
+    #img_data = await data.read()
+    #img_id = str(uuid.uuid4())
+    #storage.put_data(img_id,img_data)
+    #return img_id
 
 def available_gpu_memory():
     command = "nvidia-smi --query-gpu=memory.free --format=csv"
@@ -824,10 +832,12 @@ async def extract_frames(video_path: str, video_id: str):
             if not is_success:
                 continue
             img_bytes = io.BytesIO(buffer).getvalue()
-            img_file = UploadFile(file=io.BytesIO(img_bytes), filename=f"frame_{frame_number}.png")
+            #img_file = UploadFile(file=io.BytesIO(img_bytes), filename=f"frame_{frame_number}.png")
+
+            img_id = f"{video_id}_{frame_number}"
 
             # Store image and get image ID
-            image_id = await store_image(img_file)
+            image_id = store_image(img_bytes, img_id)
             metadata["image_ids"][f"frame_{frame_number}"] = image_id
 
             # Generate metadata for each frame
@@ -912,7 +922,6 @@ async def get_video_frames(video_id: str, start_frame: int = Query(0), end_frame
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
     frames = npz_data["frames"]
-    pts_to_frame_number = npz_data["pts_to_frame_number"].item()
     metadata = npz_data["metadata"].item()
 
     # Adjust end_frame if None
@@ -922,11 +931,10 @@ async def get_video_frames(video_id: str, start_frame: int = Query(0), end_frame
     if start_frame < 0 or end_frame > len(frames) or start_frame >= end_frame:
         raise HTTPException(status_code=400, detail="Frame range out of bounds")
 
-    requested_frames = frames[start_frame:end_frame]
-    filtered_pts_to_frame_number = {pts: frame_number for pts, frame_number in pts_to_frame_number.items() if start_frame <= frame_number < end_frame}
-    filtered_metadata = {key: value for key, value in metadata["tracking_points"].items() if start_frame <= int(key.split('_')[1]) < end_frame}
+    img_ids = [metadata["image_ids"].get(f"frame_{frame_number}") for frame_number in range(start_frame, end_frame)]
+    
+    return {"img_ids": img_ids}
 
-    return {"frames": requested_frames.tolist(), "pts_to_frame_number": filtered_pts_to_frame_number, "metadata": filtered_metadata}
 
 
 @app.get("/video/mask_frames/{video_id}/", tags=["video"])
@@ -1110,52 +1118,6 @@ async def call_endpoint(video_id: str, start_frame: int = Query(0), end_frame: i
     np.savez(npz_path, frames=npz_data["frames"], keyframes=npz_data["keyframes"], pts_to_frame_number=npz_data["pts_to_frame_number"].item(), metadata=metadata)
 
     return {"img_ids": img_ids}
-
-@app.put("/plugins/video/call_endpoint2")
-async def call_endpoint2(video_id: str, start_frame: int = Query(0), end_frame: int = Query(None), prompt: str = Query("")):
-    npz_path = os.path.join(storage_folder, f"{video_id}.npz")
-    if not os.path.exists(npz_path):
-        raise HTTPException(status_code=404, detail="Video not found")
-
-    try:
-        npz_data = np.load(npz_path, allow_pickle=True)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error loading video frames")
-
-    frames = npz_data["frames"]
-    metadata = npz_data["metadata"].item()
-
-    print(f"Total frames available: {len(frames)}")
-    print(f"Requested start frame: {start_frame}, end frame: {end_frame}")
-
-    # Adjust end_frame if None
-    if end_frame is None:
-        end_frame = len(frames)
-
-    if start_frame < 0 or end_frame > len(frames) or start_frame >= end_frame:
-        raise HTTPException(status_code=400, detail="Frame range out of bounds")
-
-    img_ids = [metadata["image_ids"].get(f"frame_{frame_number}") for frame_number in range(start_frame, end_frame)]
-    img_ids = [img_id for img_id in img_ids if img_id]
-
-    if not img_ids:
-        raise HTTPException(status_code=400, detail="No valid image IDs found in the specified frame range")
-
-    # Get the plugin port from the port mapping
-    plugin_name = "Gsam"  # Replace with the correct plugin name
-    plugin_port = int(port_mapping.get(plugin_name, 8001))  # Default to 8001 if not found
-
-    # Process all frames in a single call to the plugin
-    masks = process_frames_with_plugin(img_ids, prompt, plugin_port)
-
-    for frame_number, mask in zip(range(start_frame, start_frame + len(masks)), masks):
-        metadata["masks"][f"frame_{frame_number}"] = mask
-
-    # Save updated metadata
-    np.savez(npz_path, frames=npz_data["frames"], keyframes=npz_data["keyframes"], pts_to_frame_number=npz_data["pts_to_frame_number"].item(), metadata=metadata)
-
-    return {"img_ids": img_ids}
-
 
 @app.put("/data/store/{key}")
 def store_data(key: str, item: dict):
