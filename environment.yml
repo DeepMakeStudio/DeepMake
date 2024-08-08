@@ -24,3 +24,4 @@ dependencies:
       - pyjwt
       - pyside6
       - opencv-python
+      - pyav
