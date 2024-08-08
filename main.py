@@ -51,6 +51,7 @@ origins = [
     "http://localhost:8080",
     "http://127.0.0.1",
     "http://127.0.0.1:8080",
+    "*"
 ]
 
 origin_regexes = [
@@ -785,39 +786,39 @@ async def store_multiple_images(data):
 
 @app.post("/video/upload/", tags=["video"])
 async def upload_video(request: Request, file: UploadFile = File(...)):
-    try:
-        # Print request headers for debugging
-        print(f"Request headers: {request.headers}")
-        print(f"Content type: {request.headers['content-type']}")
-        
-        # Print file details
-        print(f"Filename: {file.filename}")
-        print(f"Content type: {file.content_type}")
+    # Print request headers for debugging
+    print(f"Request headers: {request.headers}")
+    print(f"Content type: {request.headers['content-type']}")
+    
+    # Print file details
+    print(f"Filename: {file.filename}")
+    print(f"Content type: {file.content_type}")
 
-        # Generate a unique ID for the video
-        video_id = str(uuid.uuid4())
-        video_path = os.path.join(storage_folder, f"{video_id}.mp4")
+    # # Generate a unique ID for the video
+    # video_id = str(uuid.uuid4())
+    # Hask the video file and use as video ID
+    print(f"Hashing video file to generate video ID")
+    video_id = str(md5(file.file.read()).hexdigest())
+    file.file.seek(0)
+    print(f"Video ID: {video_id}") 
+    video_path = os.path.join(storage_folder, f"{video_id}.mp4")
 
-        # Save the uploaded video file
-        with open(video_path, "wb") as video_file:
-            shutil.copyfileobj(file.file, video_file)
+    # Save the uploaded video file
+    with open(video_path, "wb") as video_file:
+        shutil.copyfileobj(file.file, video_file)
 
-        # Enqueue background task to process frames
-        huey_enqueue_process_frames(video_path, video_id)
+    # Enqueue background task to process frames
+    huey_enqueue_process_frames(video_path, video_id)
 
-        # Return success response with video ID
-        return {"status": "Success", "video_id": video_id}
-    except Exception as e:
-        # Raise HTTPException with error details in case of failure
-        raise HTTPException(status_code=500, detail=str(e))
+    # Return success response with video ID
+    return {"status": "Success", "video_id": video_id}
 
 async def extract_frames(video_path: str, video_id: str):
     try:
         cap = cv2.VideoCapture(video_path)
         pts_to_frame_number = {}
         frames = []
-        keyframes = []
-        metadata = {"tracking_points": {}, "masks": {}, "image_ids": {}}
+        metadata = {"include_points": {}, "exclude_points": {}, "masks": {}, "image_ids": {}, "keyframes": {}}
 
         frame_number = 0
         while True:
@@ -840,32 +841,27 @@ async def extract_frames(video_path: str, video_id: str):
             image_id = store_image(img_bytes, img_id)
             metadata["image_ids"][f"frame_{frame_number}"] = image_id
 
-            # Generate metadata for each frame
-            metadata["tracking_points"][f"frame_{frame_number}"] = generate_tracking_points(frame)
-            metadata["masks"][f"frame_{frame_number}"] = []  # Initialize empty mask list for each frame
-
             frames.append(frame)
-            if frame_number % 30 == 0:  # Store keyframes
-                keyframes.append(frame)
+            # if frame_number % 30 == 0:  # Store keyframes
+            #     keyframes.append(frame)
 
             frame_number += 1
 
         cap.release()
 
         frames_array = np.array(frames)
-        keyframes_array = np.array(keyframes)
-        np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=frames_array, keyframes=keyframes_array, pts_to_frame_number=pts_to_frame_number, metadata=metadata)
+        # keyframes_array = np.array(keyframes)
+        if not os.path.exists(os.path.join(storage_folder, f"{video_id}.npz")):
+            np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=frames_array, pts_to_frame_number=pts_to_frame_number, metadata=metadata)
+        else:
+            pass
         print(f"Frames and keyframes saved for video ID: {video_id}")
         print(f"Total frames extracted: {frame_number}")
         print(f"Frames array shape: {frames_array.shape}")
-        print(f"Keyframes array shape: {keyframes_array.shape}")
+        # print(f"Keyframes array shape: {keyframes_array.shape}")
     except Exception as e:
         print(f"Error extracting frames: {str(e)}")
         raise e
-        
-def generate_tracking_points(frame):
-    # Implement tracking points generation logic
-    return [(100, 200), (150, 250)]
 
 
 # Background task to process frames
@@ -989,10 +985,31 @@ async def get_keyframes(video_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error loading keyframes")
 
-    keyframes = npz_data["keyframes"]
+    keyframes = npz_data["metadata"].item().get("keyframes", [])
+    return {"keyframes": keyframes}
     # Assuming effect settings are stored separately
     #effect_settings = get_effect_settings_for_keyframes(video_id)
     #return {"keyframes": keyframes.tolist(), "effect_settings": effect_settings}
+
+@app.put("/video/set_keyframes/{video_id}/", tags=["video"])
+async def set_keyframes(video_id: str, new_keyframes: dict):
+    npz_path = os.path.join(storage_folder, f"{video_id}.npz")
+    if not os.path.exists(npz_path):
+        raise HTTPException(status_code=404, detail="Video not found")
+    
+    try:
+        npz_data = np.load(npz_path, allow_pickle=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error loading video")
+    
+    metadata = npz_data["metadata"].item()
+    
+    keyframes = metadata.get("keyframes", {})
+    keyframes.update(new_keyframes)
+    metadata["keyframes"] = keyframes
+
+    np.savez(npz_path, frames=npz_data["frames"], pts_to_frame_number=npz_data["pts_to_frame_number"].item(), metadata=metadata)
+    return({"status": "Success"})
 
 @app.get("/video/export_masks/{video_id}/", tags=["video"])
 async def export_masks(video_id: str):
@@ -1060,6 +1077,7 @@ async def export_masks(video_id: str):
 # Import masks from a video or image sequence
 @app.post("/video/import_masks/{video_id}/", tags=["video"])
 async def import_masks(video_id: str, masks: List[UploadFile]):
+    return({"status": "Failed" , "message": "Not implemented yet"})
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
         raise HTTPException(status_code=404, detail="Video not found")
@@ -1069,7 +1087,7 @@ async def import_masks(video_id: str, masks: List[UploadFile]):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
-    frames = npz_data["frames"]
+    # frames = npz_data["frames"]
 
     for i, mask_file in enumerate(masks):
         mask_data = await mask_file.read()
@@ -1078,8 +1096,8 @@ async def import_masks(video_id: str, masks: List[UploadFile]):
 
     return {"status": "Success"}
 
-@app.put("/plugins/video/call_endpoint")
-async def call_endpoint(video_id: str, start_frame: int = Query(0), end_frame: int = Query(None), prompt: str = Query("")):
+@app.put("/plugins/video/call_endpoint/{plugin_name}/{endpoint}", tags=["video"])
+async def call_video_endpoint(plugin_name: str, endpoint: str, video_id: str, json_data: dict, start_frame: int = Query(0), end_frame: int = Query(None)):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
         raise HTTPException(status_code=404, detail="Video not found")
@@ -1101,23 +1119,16 @@ async def call_endpoint(video_id: str, start_frame: int = Query(0), end_frame: i
 
     if start_frame < 0 or end_frame > len(frames) or start_frame >= end_frame:
         raise HTTPException(status_code=400, detail="Frame range out of bounds")
+    
+    job_list = []
+    for framenumber in range(max(0,start_frame), end_frame):
+        json_data['img'] = f'{video_id}_{framenumber}'
+        response = await call_endpoint(plugin_name, endpoint, json_data)
+        job_id = response["job_id"]
+        print("Job ID:", job_id)
+        job_list.append(job_id)
 
-    img_ids = []
-    # Get the plugin port from the port mapping
-    plugin_name = "Gsam"  # Replace with the correct plugin name
-    plugin_port = int(port_mapping.get(plugin_name, 8001))  # Default to 8001 if not found
-
-    for frame_number in range(start_frame, end_frame):
-        img_id = metadata["image_ids"].get(f"frame_{frame_number}")
-        if img_id:
-            mask = process_frame_with_plugin(img_id, prompt, plugin_port)
-            img_ids.append(mask)
-            metadata["masks"][f"frame_{frame_number}"] = mask
-
-    # Save updated metadata
-    np.savez(npz_path, frames=npz_data["frames"], keyframes=npz_data["keyframes"], pts_to_frame_number=npz_data["pts_to_frame_number"].item(), metadata=metadata)
-
-    return {"img_ids": img_ids}
+    return {"job_ids": job_list}
 
 @app.put("/data/store/{key}")
 def store_data(key: str, item: dict):

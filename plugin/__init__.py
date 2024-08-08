@@ -90,7 +90,7 @@ def save_new_metadata(npz_data, video_id, tracking_dict):
         metadata = npz_data["metadata"]
         metadata = metadata[()]
         metadata.update(tracking_dict)
-    np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=npz_data["frames"], keyframes=npz_data["keyframes"], pts_to_frame_number=npz_data["pts_to_frame_number"], metadata=metadata)
+    np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=npz_data["frames"], pts_to_frame_number=npz_data["pts_to_frame_number"], metadata=metadata)
 
 class Plugin():
     """
