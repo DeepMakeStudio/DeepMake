@@ -32,12 +32,9 @@ import sentry_sdk
 from sentry_sdk.integrations.huey import HueyIntegration
 from hashlib import md5
 import sqlite3    
-from PySide6.QtWidgets import QApplication
+# from PySide6.QtWidgets import QApplication
 import cv2
 import io
-
-
-from routers import ui, plugin_manager, report, login
 
 import asyncio
 from huey.exceptions import TaskException
@@ -114,10 +111,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(ui.router, tags=["ui"], prefix="/ui")
-app.include_router(plugin_manager.router, tags=["plugin_manager"], prefix="/plugin_manager")
-app.include_router(report.router, tags=["report"], prefix="/report")
-app.include_router(login.router, tags=["login"], prefix="/login")
+# from routers import ui, plugin_manager, report, login
+
+# app.include_router(ui.router, tags=["ui"], prefix="/ui")
+# app.include_router(plugin_manager.router, tags=["plugin_manager"], prefix="/plugin_manager")
+# app.include_router(report.router, tags=["report"], prefix="/report")
+# app.include_router(login.router, tags=["login"], prefix="/login")
+
 client = requests.Session()
 
 class Task(BaseModel):
@@ -800,6 +800,14 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
     print(f"Hashing video file to generate video ID")
     video_id = str(md5(file.file.read()).hexdigest())
     file.file.seek(0)
+    video = av.open(file.file)
+    # Get video height and width
+    video_height = video.streams.video[0].height
+    video_width = video.streams.video[0].width
+    number_of_frames = video.streams.video[0].frames
+    video.close()
+    file.file.seek(0)
+
     print(f"Video ID: {video_id}") 
     video_path = os.path.join(storage_folder, f"{video_id}.mp4")
 
@@ -811,7 +819,7 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
     huey_enqueue_process_frames(video_path, video_id)
 
     # Return success response with video ID
-    return {"status": "Success", "video_id": video_id}
+    return {"status": "Success", "video_id": video_id, "metadata": {"height": video_height, "width": video_width, "frames": number_of_frames}}
 
 async def extract_frames(video_path: str, video_id: str):
     try:
