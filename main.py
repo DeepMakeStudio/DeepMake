@@ -41,6 +41,8 @@ from huey.exceptions import TaskException
 from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
 
+UI_ENABLED = False
+
 origins = [
     "http://deepmake.com",
     "https://deepmake.com",
@@ -111,12 +113,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# from routers import ui, plugin_manager, report, login
+if UI_ENABLED:
+    from routers import ui, plugin_manager, report, login
 
-# app.include_router(ui.router, tags=["ui"], prefix="/ui")
-# app.include_router(plugin_manager.router, tags=["plugin_manager"], prefix="/plugin_manager")
-# app.include_router(report.router, tags=["report"], prefix="/report")
-# app.include_router(login.router, tags=["login"], prefix="/login")
+    app.include_router(ui.router, tags=["ui"], prefix="/ui")
+    app.include_router(plugin_manager.router, tags=["plugin_manager"], prefix="/plugin_manager")
+    app.include_router(report.router, tags=["report"], prefix="/report")
+    app.include_router(login.router, tags=["login"], prefix="/login")
 
 client = requests.Session()
 
