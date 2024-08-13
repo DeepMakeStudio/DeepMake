@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Response, Request, Query
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse, FileResponse
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
@@ -1051,14 +1051,17 @@ async def export_masks(video_id: str):
     metadata = npz_data["metadata"].item().get("masks", {})
     if not os.path.exists(os.path.join("export", video_id)):
         os.mkdir(os.path.join("export", video_id))
+    else:
+        shutil.rmtree(os.path.join("export", video_id))
+        os.mkdir(os.path.join("export", video_id))
 
     for frame_name in metadata.keys():
         frame = metadata[frame_name]
         frame_number = frame_name.replace("frame_", "")
         for maskname in frame.keys():
-            if not os.path.exists(os.path.join("export", video_id, maskname)):
+            if not os.path.exists(os.path.join("export", video_id, maskname.replace(" ", "_"))):
                 # Create a new folder for the mask
-                os.mkdir(os.path.join("export", video_id, maskname))
+                os.mkdir(os.path.join("export", video_id, maskname.replace(" ", "_")))
             mask = frame[maskname]
             if "img_id" in mask:
                 try:
@@ -1066,61 +1069,35 @@ async def export_masks(video_id: str):
                 except Exception as e:
                     print(f"Error fetching image: {str(e)} for mask {maskname}, frame {frame_number}, img_id {mask['img_id']}")
                     continue
-                filename = os.path.join("export", video_id, maskname, f"{frame_number.zfill(5)}.png")
+                filename = os.path.join("export", video_id, maskname.replace(" ", "_"), f"{frame_number.zfill(5)}.png")
                 frame_image = Image.open(BytesIO(image))
                 frame_image.save(filename)
 
-    for maskname in output_videos:
-        for packet in output_streams[maskname].encode():
-            output_videos[maskname].mux(packet)
-        output_videos[maskname].close()
-        print(f"Closed video container for {maskname}")      
+    video_list = []
+    for imgdir in sorted(os.listdir(os.path.join("export", video_id))):
+        if not os.path.isdir(os.path.join("export", video_id, imgdir)):
+            continue
+        video = cv2.VideoWriter(f"export/{video_id}/{imgdir}.mp4", cv2.VideoWriter_fourcc(*'mp4v'), 30, (frame_image.width, frame_image.height))
+        for img in sorted(os.listdir(os.path.join("export", video_id, imgdir))):
+            video.write(cv2.imread(os.path.join("export", video_id, imgdir, img)))
+        video.release()
+        video_list.append(f"{video_id}/{imgdir}")
+
+    return {"status": "Success", "video_list": video_list}
 
 
-    # mask_ids = [mask_id for mask_id in frames_metadata.values() if mask_id]
-    # print(f"Mask IDs: {mask_ids}")
+@app.get("/video/download_masks/{video_id}/{mask_name}", tags=["video"])
+async def download_masks(video_id: str, mask_name: str):
+    if not os.path.exists(os.path.join("export", video_id, mask_name+".mp4")):
+        raise HTTPException(status_code=404, detail="Mask not found")
+    
+    forbidden = ["..", "/", "\\"]
+    if any([x in mask_name for x in forbidden]):
+        raise HTTPException(status_code=400, detail="Invalid mask name")
+    if any([x in video_id for x in forbidden]):
+        raise HTTPException(status_code=400, detail="Invalid video ID")
 
-    # if not mask_ids:
-    #     raise HTTPException(status_code=404, detail="No masks found for the given video")
-
-    # # Create a new video with the masked frames
-    # try:
-    #     output_container = av.open(video_path, mode='w')
-    #     stream = output_container.add_stream('mpeg4', rate=30)
-    #     mask_example = fetch_image(mask_ids[0])
-    #     mask_pil = Image.open(BytesIO(mask_example))
-    #     stream.width = mask_pil.width
-    #     stream.height = mask_pil.height
-    #     stream.pix_fmt = 'yuv420p'
-
-    #     print(f"Starting to encode frames into {video_path}")
-
-    #     for mask_id in mask_ids:
-    #         mask = fetch_image(mask_id)
-    #         mask_pil = Image.open(BytesIO(mask)).convert("L")
-    #         mask_np = np.array(mask_pil)
-
-    #         # Convert to RGB to match the video's format
-    #         mask_rgb = np.stack([mask_np] * 3, axis=-1)
-
-    #         frame_rgb = av.VideoFrame.from_ndarray(mask_rgb, format='rgb24')
-    #         packet = stream.encode(frame_rgb)
-    #         output_container.mux(packet)
-    #         print(f"Processed mask ID: {mask_id}")
-
-    #     for packet in stream.encode():
-    #         output_container.mux(packet)
-
-    #     print(f"Finished encoding video to {video_path}")
-    # except Exception as e:
-    #     print(f"Error encoding video: {str(e)}")
-    #     raise HTTPException(status_code=500, detail="Error encoding video")
-    # finally:
-    #     output_container.close()
-    #     print(f"Closed video container for {video_path}")
-
-    return {"status": "Success"}
-
+    return FileResponse(f"export/{video_id}/{mask_name}.mp4", filename=f"{video_id}_{mask_name}.mp4")
 
 # Import masks from a video or image sequence
 @app.post("/video/import_masks/{video_id}/", tags=["video"])
