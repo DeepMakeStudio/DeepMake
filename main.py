@@ -960,6 +960,13 @@ async def get_mask_frames(video_id: str, start_frame: int = Query(0), end_frame:
 
     filtered_metadata = {key: value for key, value in frames_metadata.items() if start_frame <= int(key.split('_')[1]) < end_frame}
 
+    for mask in filtered_metadata:
+        if "image" in filtered_metadata[mask]:
+            image = filtered_metadata[mask]["image"]
+            del filtered_metadata[mask]["image"]
+            img_id = store_image(image)
+            filtered_metadata[mask]["img_id"] = img_id
+
     return {"metadata": filtered_metadata}
 
 @app.post("/video/set_mask/{video_id}", tags=["video"])
@@ -978,6 +985,12 @@ async def set_mask(video_id: str, masks: dict):
     # Update metadata with new masks
     for frame_number, mask_data in masks.items():
         metadata["masks"][f"frame_{frame_number}"] = mask_data
+
+    for mask in metadata["masks"]:
+        if "img_id" in metadata["masks"][mask]:
+            image_id = metadata["masks"][mask]["img_id"]
+            image = fetch_image(image_id)
+            metadata["masks"][mask]["img"] = image
 
     # Save updated metadata
     np.savez(npz_path, frames=npz_data["frames"], pts_to_frame_number=npz_data["pts_to_frame_number"].item(), metadata=metadata)
@@ -1035,54 +1048,78 @@ async def export_masks(video_id: str):
         print(f"Error loading npz data: {str(e)}")
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
-    metadata = npz_data["metadata"].item()
-    frames_metadata = metadata.get("masks", {})
-    new_video_id = str(uuid.uuid4())
-    video_path = os.path.join(storage_folder, f"{new_video_id}_masked.mp4")
+    metadata = npz_data["metadata"].item().get("masks", {})
+    if not os.path.exists(os.path.join("export", video_id)):
+        os.mkdir(os.path.join("export", video_id))
 
-    mask_ids = [mask_id for mask_id in frames_metadata.values() if mask_id]
-    print(f"Mask IDs: {mask_ids}")
+    for frame_name in metadata.keys():
+        frame = metadata[frame_name]
+        frame_number = frame_name.replace("frame_", "")
+        for maskname in frame.keys():
+            if not os.path.exists(os.path.join("export", video_id, maskname)):
+                # Create a new folder for the mask
+                os.mkdir(os.path.join("export", video_id, maskname))
+            mask = frame[maskname]
+            if "img_id" in mask:
+                try:
+                    image = fetch_image(mask["img_id"])
+                except Exception as e:
+                    print(f"Error fetching image: {str(e)} for mask {maskname}, frame {frame_number}, img_id {mask['img_id']}")
+                    continue
+                filename = os.path.join("export", video_id, maskname, f"{frame_number.zfill(5)}.png")
+                frame_image = Image.open(BytesIO(image))
+                frame_image.save(filename)
 
-    if not mask_ids:
-        raise HTTPException(status_code=404, detail="No masks found for the given video")
+    for maskname in output_videos:
+        for packet in output_streams[maskname].encode():
+            output_videos[maskname].mux(packet)
+        output_videos[maskname].close()
+        print(f"Closed video container for {maskname}")      
 
-    # Create a new video with the masked frames
-    try:
-        output_container = av.open(video_path, mode='w')
-        stream = output_container.add_stream('mpeg4', rate=30)
-        mask_example = fetch_image(mask_ids[0])
-        mask_pil = Image.open(BytesIO(mask_example))
-        stream.width = mask_pil.width
-        stream.height = mask_pil.height
-        stream.pix_fmt = 'yuv420p'
 
-        print(f"Starting to encode frames into {video_path}")
+    # mask_ids = [mask_id for mask_id in frames_metadata.values() if mask_id]
+    # print(f"Mask IDs: {mask_ids}")
 
-        for mask_id in mask_ids:
-            mask = fetch_image(mask_id)
-            mask_pil = Image.open(BytesIO(mask)).convert("L")
-            mask_np = np.array(mask_pil)
+    # if not mask_ids:
+    #     raise HTTPException(status_code=404, detail="No masks found for the given video")
 
-            # Convert to RGB to match the video's format
-            mask_rgb = np.stack([mask_np] * 3, axis=-1)
+    # # Create a new video with the masked frames
+    # try:
+    #     output_container = av.open(video_path, mode='w')
+    #     stream = output_container.add_stream('mpeg4', rate=30)
+    #     mask_example = fetch_image(mask_ids[0])
+    #     mask_pil = Image.open(BytesIO(mask_example))
+    #     stream.width = mask_pil.width
+    #     stream.height = mask_pil.height
+    #     stream.pix_fmt = 'yuv420p'
 
-            frame_rgb = av.VideoFrame.from_ndarray(mask_rgb, format='rgb24')
-            packet = stream.encode(frame_rgb)
-            output_container.mux(packet)
-            print(f"Processed mask ID: {mask_id}")
+    #     print(f"Starting to encode frames into {video_path}")
 
-        for packet in stream.encode():
-            output_container.mux(packet)
+    #     for mask_id in mask_ids:
+    #         mask = fetch_image(mask_id)
+    #         mask_pil = Image.open(BytesIO(mask)).convert("L")
+    #         mask_np = np.array(mask_pil)
 
-        print(f"Finished encoding video to {video_path}")
-    except Exception as e:
-        print(f"Error encoding video: {str(e)}")
-        raise HTTPException(status_code=500, detail="Error encoding video")
-    finally:
-        output_container.close()
-        print(f"Closed video container for {video_path}")
+    #         # Convert to RGB to match the video's format
+    #         mask_rgb = np.stack([mask_np] * 3, axis=-1)
 
-    return {"status": "Success", "masked_video_id": new_video_id}
+    #         frame_rgb = av.VideoFrame.from_ndarray(mask_rgb, format='rgb24')
+    #         packet = stream.encode(frame_rgb)
+    #         output_container.mux(packet)
+    #         print(f"Processed mask ID: {mask_id}")
+
+    #     for packet in stream.encode():
+    #         output_container.mux(packet)
+
+    #     print(f"Finished encoding video to {video_path}")
+    # except Exception as e:
+    #     print(f"Error encoding video: {str(e)}")
+    #     raise HTTPException(status_code=500, detail="Error encoding video")
+    # finally:
+    #     output_container.close()
+    #     print(f"Closed video container for {video_path}")
+
+    return {"status": "Success"}
 
 
 # Import masks from a video or image sequence
