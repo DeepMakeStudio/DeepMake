@@ -980,7 +980,7 @@ async def set_mask(video_id: str, masks: dict):
         metadata["masks"][f"frame_{frame_number}"] = mask_data
 
     # Save updated metadata
-    np.savez(npz_path, frames=npz_data["frames"], keyframes=npz_data["keyframes"], pts_to_frame_number=npz_data["pts_to_frame_number"].item(), metadata=metadata)
+    np.savez(npz_path, frames=npz_data["frames"], pts_to_frame_number=npz_data["pts_to_frame_number"].item(), metadata=metadata)
 
     return {"status": "Success"}
 
