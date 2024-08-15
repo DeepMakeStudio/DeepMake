@@ -1062,7 +1062,9 @@ async def export_masks(video_id: str):
             if not os.path.exists(os.path.join("export", video_id, maskname.replace(" ", "_"))):
                 # Create a new folder for the mask
                 os.mkdir(os.path.join("export", video_id, maskname.replace(" ", "_")))
-            mask = get(frame, maskname, {})
+            mask = frame[maskname]
+            if type(mask) != dict:
+                continue
             if "img_id" in mask:
                 try:
                     image = fetch_image(mask["img_id"])
