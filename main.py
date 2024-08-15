@@ -1036,7 +1036,7 @@ async def set_keyframes(video_id: str, new_keyframes: dict):
     return({"status": "Success"})
 
 @app.get("/video/export_masks/{video_id}/", tags=["video"])
-async def export_masks(video_id: str):
+async def export_masks(video_id: str, masked_video: bool = False):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
         raise HTTPException(status_code=404, detail="Video not found")
@@ -1066,20 +1066,28 @@ async def export_masks(video_id: str):
                 if not os.path.exists(os.path.join("export", video_id, maskname.replace(" ", "_"))):
                     # Create a new folder for the mask
                     os.mkdir(os.path.join("export", video_id, maskname.replace(" ", "_")))
+                    if masked_video:
+                        os.mkdir(os.path.join("export", video_id, maskname.replace(" ", "_")+"_masked"))
                 try:
-                    image = fetch_image(mask["img_id"])
+                    mask_image = Image.open(BytesIO(fetch_image(mask["img_id"])))
                 except Exception as e:
                     print(f"Error fetching image: {str(e)} for mask {maskname}, frame {frame_number}, img_id {mask['img_id']}")
                     continue
                 filename = os.path.join("export", video_id, maskname.replace(" ", "_"), f"{frame_number.zfill(5)}.png")
-                frame_image = Image.open(BytesIO(image))
-                frame_image.save(filename)
+                mask_image.save(filename)
+                if masked_video:
+                    original_image = np.asarray(Image.open(BytesIO(fetch_image(video_id + "_" + frame_number))))
+                    masked_image = np.where(np.repeat(np.expand_dims(np.asarray(mask_image), axis=2), 3, axis=2) > 0, original_image, 0)
+                    masked_filename = os.path.join("export", video_id, maskname.replace(" ", "_")+"_masked", f"{frame_number.zfill(5)}.png")
+                    masked_image = Image.fromarray(masked_image).save(masked_filename)
+
+    size = mask_image.size
 
     video_list = []
     for imgdir in sorted(os.listdir(os.path.join("export", video_id))):
         if not os.path.isdir(os.path.join("export", video_id, imgdir)):
             continue
-        video = cv2.VideoWriter(f"export/{video_id}/{imgdir}.mp4", cv2.VideoWriter_fourcc(*'mp4v'), 30, (frame_image.width, frame_image.height))
+        video = cv2.VideoWriter(f"export/{video_id}/{imgdir}.mp4", cv2.VideoWriter_fourcc(*'mp4v'), 30, size)
         for img in sorted(os.listdir(os.path.join("export", video_id, imgdir))):
             video.write(cv2.imread(os.path.join("export", video_id, imgdir, img)))
         video.release()
