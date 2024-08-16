@@ -227,11 +227,11 @@ def store_image(img_data, img_id=None):
     storage.put_data(img_id, img_data)
     return img_id
 
-#async def store_image(data):
-    #img_data = await data.read()
-    #img_id = str(uuid.uuid4())
-    #storage.put_data(img_id,img_data)
-    #return img_id
+async def upload_store_image(data):
+    img_data = await data.read()
+    img_id = str(uuid.uuid4())
+    storage.put_data(img_id,img_data)
+    return img_id
 
 def available_gpu_memory():
     command = "nvidia-smi --query-gpu=memory.free --format=csv"
@@ -766,7 +766,7 @@ async def get_img(img_id: str):
 @app.post("/image/upload")
 async def upload_img(file: UploadFile):
     # serialized_image = await serialize_image(file)
-    image_id = await store_image(file)
+    image_id = await upload_store_image(file)
     return {"status": "Success", "image_id": image_id}
 
 @app.post("/image/upload_multiple")
