@@ -96,6 +96,8 @@ elif sys.platform == "linux":
     storage_folder = os.path.join(os.getenv('HOME'),".local", "DeepMake")
 # exit()
 
+# storage_folder =  "/opt/dlami/nvme/DeepMake" # Set storage folder for AWS instances
+
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
 
@@ -945,7 +947,7 @@ async def get_video_frames(video_id: str, start_frame: int = Query(0), end_frame
 
 
 @app.get("/video/mask_frames/{video_id}/", tags=["video"])
-async def get_mask_frames(video_id: str, start_frame: int = Query(0), end_frame: int = Query(30)):
+async def get_mask_frames(video_id: str, start_frame: int = None, end_frame: int = None):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
         raise HTTPException(status_code=404, detail="Video not found")
@@ -958,13 +960,19 @@ async def get_mask_frames(video_id: str, start_frame: int = Query(0), end_frame:
     metadata = npz_data["metadata"].item()
     frames_metadata = metadata.get("masks", {})
 
+    if start_frame is None:
+        start_frame = 0
+
+    if end_frame is None:
+        end_frame = len(frames_metadata)
+
     filtered_metadata = {key: value for key, value in frames_metadata.items() if start_frame <= int(key.split('_')[1]) < end_frame}
 
     for mask in filtered_metadata:
         if "image" in filtered_metadata[mask]:
             image = filtered_metadata[mask]["image"]
             del filtered_metadata[mask]["image"]
-            img_id = store_image(image)
+            img_id = store_image(image, f"{video_id}_mask_{mask.replace('frame_', '')}")
             filtered_metadata[mask]["img_id"] = img_id
 
     return {"metadata": filtered_metadata}

@@ -19,6 +19,8 @@ elif sys.platform == "darwin":
 elif sys.platform == "linux":
     storage_folder = os.path.join(os.getenv('HOME'),".local", "DeepMake")
 
+# storage_folder =  "/opt/dlami/nvme/DeepMake" # Set storage folder for AWS instances
+
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
 
