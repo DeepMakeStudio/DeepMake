@@ -813,6 +813,10 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
     video.close()
     file.file.seek(0)
 
+    metadata = {"height": video_height, "width": video_width, "frames": number_of_frames}
+    # store video metadata in database
+    store_data(video_id+"_metadata", metadata)
+
     print(f"Video ID: {video_id}") 
     video_path = os.path.join(storage_folder, f"{video_id}.mp4")
 
@@ -824,7 +828,7 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
     huey_enqueue_process_frames(video_path, video_id)
 
     # Return success response with video ID
-    return {"status": "Success", "video_id": video_id, "metadata": {"height": video_height, "width": video_width, "frames": number_of_frames}}
+    return {"status": "Success", "video_id": video_id, "metadata": metadata}
 
 async def extract_frames(video_path: str, video_id: str):
     try:
@@ -944,7 +948,32 @@ async def get_video_frames(video_id: str, start_frame: int = Query(0), end_frame
     
     return {"img_ids": img_ids}
 
+@app.get("/video/data/{video_id}/", tags=["video"])
+async def get_video_data(video_id: str):
+    video_metadata = retrieve_data(f"{video_id}_metadata")
+    npz_path = os.path.join(storage_folder, f"{video_id}.npz")
+    if not os.path.exists(npz_path):
+        raise HTTPException(status_code=404, detail="Video not found")
 
+    try:
+        npz_data = np.load(npz_path, allow_pickle=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error loading video frames")
+
+    frames_data = npz_data["metadata"].item()
+    frames_metadata = frames_data.get("masks", {})
+
+    for mask in frames_metadata:
+        if "image" in frames_metadata[mask]:
+            image = frames_metadata[mask]["image"]
+            del frames_metadata[mask]["image"]
+            try:
+                img_id = store_image(image, f"{video_id}_mask_{mask.replace('frame_', '')}")
+                frames_metadata[mask]["img_id"] = img_id
+            except Exception as e:
+                print(f"Error storing image: {str(e)}")
+
+    return {"metadata": frames_metadata, "video_data": video_metadata}
 
 @app.get("/video/mask_frames/{video_id}/", tags=["video"])
 async def get_mask_frames(video_id: str, start_frame: int = None, end_frame: int = None):
@@ -972,8 +1001,11 @@ async def get_mask_frames(video_id: str, start_frame: int = None, end_frame: int
         if "image" in filtered_metadata[mask]:
             image = filtered_metadata[mask]["image"]
             del filtered_metadata[mask]["image"]
-            img_id = store_image(image, f"{video_id}_mask_{mask.replace('frame_', '')}")
-            filtered_metadata[mask]["img_id"] = img_id
+            try:
+                img_id = store_image(image, f"{video_id}_mask_{mask.replace('frame_', '')}")
+                filtered_metadata[mask]["img_id"] = img_id
+            except Exception as e:
+                print(f"Error storing image: {str(e)}")
 
     return {"metadata": filtered_metadata}
 
@@ -1062,6 +1094,11 @@ async def export_masks(video_id: str, masked_video: bool = False):
     else:
         shutil.rmtree(os.path.join("export", video_id))
         os.mkdir(os.path.join("export", video_id))
+
+    try:
+        video_data = retrieve_data(f"{video_id}_metadata")
+    except Exception as e:
+        print(f"Error loading video metadata: {str(e)}")
 
     for frame_name in metadata.keys():
         frame = metadata[frame_name]
