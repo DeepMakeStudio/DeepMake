@@ -505,7 +505,7 @@ def stop_plugin(plugin_name: str):
     return {"status": "Success", "description": f"{plugin_name} stopped"}
     
 @app.put("/plugins/call_endpoint/{plugin_name}/{endpoint}")
-async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
+async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict, priority: int = 0):
     try:
         print(f"Calling endpoint {endpoint} for plugin {plugin_name}, with data {json_data}")
     except:
@@ -531,7 +531,7 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict):
     memory_func = available_gpu_memory if sys.platform != "darwin" else mac_gpu_memory
     available_memory = memory_func()
 
-    job = huey_call_endpoint(plugin_name, endpoint, json_data, port_mapping, plugin_endpoints)
+    job = huey_call_endpoint(plugin_name, endpoint, json_data, port_mapping, plugin_endpoints, priority=priority)
     store_data(f"{job.id}_available", {"memory": int(available_memory), "plugin": plugin_name, "plugin_states": plugin_states, "running_jobs": get_running_jobs()["running_jobs"]})
     if plugin_name in most_recent_use:
         most_recent_use.remove(plugin_name)
