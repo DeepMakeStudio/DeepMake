@@ -1080,6 +1080,8 @@ async def export_masks(video_id: str, masked_video: bool = False):
     npz_path = os.path.join(storage_folder, f"{video_id}.npz")
     if not os.path.exists(npz_path):
         raise HTTPException(status_code=404, detail="Video not found")
+    
+    video_metadata = retrieve_data(f"{video_id}_metadata")
 
     try:
         npz_data = np.load(npz_path, allow_pickle=True)
@@ -1089,11 +1091,10 @@ async def export_masks(video_id: str, masked_video: bool = False):
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
     metadata = npz_data["metadata"].item().get("masks", {})
-    if not os.path.exists(os.path.join("export", video_id)):
-        os.mkdir(os.path.join("export", video_id))
-    else:
-        shutil.rmtree(os.path.join("export", video_id))
-        os.mkdir(os.path.join("export", video_id))
+    video_folder = os.path.join(storage_folder, "export", video_id)
+    if os.path.exists(video_folder):
+        shutil.rmtree(video_folder)
+    os.mkdir(video_folder)
 
     try:
         video_data = retrieve_data(f"{video_id}_metadata")
@@ -1108,33 +1109,45 @@ async def export_masks(video_id: str, masked_video: bool = False):
             if type(mask) != dict:
                 continue
             if "img_id" in mask:
-                if not os.path.exists(os.path.join("export", video_id, maskname.replace(" ", "_"))):
+                if not os.path.exists(os.path.join(video_folder, maskname.replace(" ", "_"))):
                     # Create a new folder for the mask
-                    os.mkdir(os.path.join("export", video_id, maskname.replace(" ", "_")))
+                    os.mkdir(os.path.join(video_folder, maskname.replace(" ", "_")))
                     if masked_video:
-                        os.mkdir(os.path.join("export", video_id, maskname.replace(" ", "_")+"_masked"))
+                        os.mkdir(os.path.join(video_folder, maskname.replace(" ", "_")+"_masked"))
                 try:
                     mask_image = Image.open(BytesIO(fetch_image(mask["img_id"])))
                 except Exception as e:
                     print(f"Error fetching image: {str(e)} for mask {maskname}, frame {frame_number}, img_id {mask['img_id']}")
                     continue
-                filename = os.path.join("export", video_id, maskname.replace(" ", "_"), f"{frame_number.zfill(5)}.png")
+                filename = os.path.join(video_folder, maskname.replace(" ", "_"), f"{frame_number.zfill(5)}.png")
                 mask_image.save(filename)
                 if masked_video:
                     original_image = np.asarray(Image.open(BytesIO(fetch_image(video_id + "_" + frame_number))))
                     masked_image = np.where(np.repeat(np.expand_dims(np.asarray(mask_image), axis=2), 3, axis=2) > 0, original_image, 0)
-                    masked_filename = os.path.join("export", video_id, maskname.replace(" ", "_")+"_masked", f"{frame_number.zfill(5)}.png")
+                    masked_filename = os.path.join(video_folder, maskname.replace(" ", "_")+"_masked", f"{frame_number.zfill(5)}.png")
                     masked_image = Image.fromarray(masked_image).save(masked_filename)
 
-    size = mask_image.size
+    size = video_data["width"], video_data["height"]
 
     video_list = []
-    for imgdir in sorted(os.listdir(os.path.join("export", video_id))):
-        if not os.path.isdir(os.path.join("export", video_id, imgdir)):
+    blank_image = np.zeros((size[1], size[0], 3), dtype=np.uint8)
+
+    for imgdir in sorted(os.listdir(os.path.join(video_folder))):
+        if not os.path.isdir(os.path.join(video_folder, imgdir)):
             continue
-        video = cv2.VideoWriter(f"export/{video_id}/{imgdir}.mp4", cv2.VideoWriter_fourcc(*'mp4v'), 30, size)
-        for img in sorted(os.listdir(os.path.join("export", video_id, imgdir))):
-            video.write(cv2.imread(os.path.join("export", video_id, imgdir, img)))
+        video = cv2.VideoWriter(os.path.join(video_folder, f"{imgdir}.mp4"), cv2.VideoWriter_fourcc(*'mp4v'), 30, size)
+        for framenum  in range(video_data["frames"]):
+            img = f"{str(framenum).zfill(5)}.png"
+            if os.path.exists(os.path.join(video_folder, imgdir, img)):
+                try:
+                    img = cv2.imread(os.path.join(video_folder, imgdir, img))
+                    video.write(img)
+                except:
+                    video.write(blank_image)
+            else:
+                video.write(blank_image)
+        # for img in sorted(os.listdir(os.path.join(video_folder, imgdir))):
+        #     video.write(cv2.imread(os.path.join(video_folder, imgdir, img)))
         video.release()
         video_list.append(f"{video_id}/{imgdir}")
 
@@ -1143,7 +1156,7 @@ async def export_masks(video_id: str, masked_video: bool = False):
 
 @app.get("/video/download_masks/{video_id}/{mask_name}", tags=["video"])
 async def download_masks(video_id: str, mask_name: str):
-    if not os.path.exists(os.path.join("export", video_id, mask_name+".mp4")):
+    if not os.path.exists(os.path.join(storage_folder, "export", video_id, mask_name+".mp4")):
         raise HTTPException(status_code=404, detail="Mask not found")
     
     forbidden = ["..", "/", "\\"]

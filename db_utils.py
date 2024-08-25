@@ -11,6 +11,8 @@ elif sys.platform == "darwin":
 elif sys.platform == "linux":
     storage_folder = os.path.join(os.getenv('HOME'),".local", "DeepMake")
 
+# storage_folder =  "/opt/dlami/nvme/DeepMake" # Set storage folder for AWS instances
+
 def store_data(key: str, item: dict):
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
     cursor = conn.cursor()
