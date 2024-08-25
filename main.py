@@ -951,27 +951,27 @@ async def get_video_frames(video_id: str, start_frame: int = Query(0), end_frame
 @app.get("/video/data/{video_id}/", tags=["video"])
 async def get_video_data(video_id: str):
     video_metadata = retrieve_data(f"{video_id}_metadata")
-    npz_path = os.path.join(storage_folder, f"{video_id}.npz")
-    if not os.path.exists(npz_path):
+    if video_metadata is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    try:
-        npz_data = np.load(npz_path, allow_pickle=True)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error loading video frames")
-
     frames_data = npz_data["metadata"].item()
-    frames_metadata = frames_data.get("masks", {})
+    try: 
+        npz_path = os.path.join(storage_folder, f"{video_id}.npz")
+        npz_data = np.load(npz_path, allow_pickle=True)
+        frames_metadata = frames_data.get("masks", {})
 
-    for mask in frames_metadata:
-        if "image" in frames_metadata[mask]:
-            image = frames_metadata[mask]["image"]
-            del frames_metadata[mask]["image"]
-            try:
-                img_id = store_image(image, f"{video_id}_mask_{mask.replace('frame_', '')}")
-                frames_metadata[mask]["img_id"] = img_id
-            except Exception as e:
-                print(f"Error storing image: {str(e)}")
+        for mask in frames_metadata:
+            if "image" in frames_metadata[mask]:
+                image = frames_metadata[mask]["image"]
+                del frames_metadata[mask]["image"]
+                try:
+                    img_id = store_image(image, f"{video_id}_mask_{mask.replace('frame_', '')}")
+                    frames_metadata[mask]["img_id"] = img_id
+                except Exception as e:
+                    print(f"Error storing image: {str(e)}")
+    except Exception as e:
+        print("No npz file found")
+        frames_metadata = {}
 
     return {"metadata": frames_metadata, "video_data": video_metadata}
 
@@ -1165,7 +1165,7 @@ async def download_masks(video_id: str, mask_name: str):
     if any([x in video_id for x in forbidden]):
         raise HTTPException(status_code=400, detail="Invalid video ID")
 
-    return FileResponse(f"export/{video_id}/{mask_name}.mp4", filename=f"{video_id}_{mask_name}.mp4")
+    return FileResponse(os.path.join(storage_folder, "export", video_id, mask_name+".mp4"), filename=f"{video_id}_{mask_name}.mp4")
 
 # Import masks from a video or image sequence
 @app.post("/video/import_masks/{video_id}/", tags=["video"])
