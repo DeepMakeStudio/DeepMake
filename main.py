@@ -810,6 +810,11 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
     video_height = video.streams.video[0].height
     video_width = video.streams.video[0].width
     number_of_frames = video.streams.video[0].frames
+    # Store first frame to Huey storage
+    first_frame = next(video.decode(video=0)).to_image()
+    first_frame_png = io.BytesIO()
+    first_frame.save(first_frame_png, format="PNG")
+    store_image(first_frame_png.getvalue(), video_id+"_0")
     video.close()
     file.file.seek(0)
 
