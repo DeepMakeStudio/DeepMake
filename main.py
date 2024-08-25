@@ -954,10 +954,10 @@ async def get_video_data(video_id: str):
     if video_metadata is None:
         raise HTTPException(status_code=404, detail="Video not found")
 
-    frames_data = npz_data["metadata"].item()
     try: 
         npz_path = os.path.join(storage_folder, f"{video_id}.npz")
         npz_data = np.load(npz_path, allow_pickle=True)
+        frames_data = npz_data["metadata"].item()
         frames_metadata = frames_data.get("masks", {})
 
         for mask in frames_metadata:
