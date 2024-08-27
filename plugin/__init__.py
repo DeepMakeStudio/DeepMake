@@ -11,6 +11,8 @@ from PIL import Image
 from tqdm import tqdm
 import shutil
 import threading
+import sqlite3
+import json
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -85,14 +87,33 @@ def get_video(video_id: str):
         raise HTTPException(status_code=500, detail="Error loading video frames")
     return npz_data
 
-def save_new_metadata(npz_data, video_id, tracking_dict):
-    if npz_data.get("metadata") is None:
-        metadata = tracking_dict
-    else:
-        metadata = npz_data["metadata"]
-        metadata = metadata[()]
+def retrieve_data(key: str):
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM key_value_store WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        data = json.loads(row[0])
+        return data
+    raise HTTPException(status_code=404, detail="Key not found")
+
+def store_data(key: str, item: dict):
+    conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
+    cursor = conn.cursor()
+    value = json.dumps(dict(item))
+    cursor.execute("REPLACE INTO key_value_store (key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
+    conn.close()
+    return {"message": "Data stored successfully"}
+
+def save_new_metadata(video_id, tracking_dict):
+    try:
+        metadata = retrieve_data(f"{video_id}_metadata")
         metadata.update(tracking_dict)
-    np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=npz_data["frames"], pts_to_frame_number=npz_data["pts_to_frame_number"], metadata=metadata)
+    except:
+        metadata = tracking_dict
+    store_data(f"{video_id}_metadata", metadata)
 
 class Plugin():
     """
