@@ -873,8 +873,9 @@ async def extract_frames(video_path: str, video_id: str):
 
         frames_array = np.array(frames)
         # keyframes_array = np.array(keyframes)
+        store_data(f"{video_id}_metadata", metadata)
         if not os.path.exists(os.path.join(storage_folder, f"{video_id}.npz")):
-            np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=frames_array, pts_to_frame_number=pts_to_frame_number, metadata=metadata)
+            np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=frames_array, pts_to_frame_number=pts_to_frame_number)
         else:
             pass
         print(f"Frames and keyframes saved for video ID: {video_id}")
@@ -885,6 +886,10 @@ async def extract_frames(video_path: str, video_id: str):
         print(f"Error extracting frames: {str(e)}")
         raise e
 
+@app.get("/video/metadata/{video_id}", tags=["video"])
+def get_video_metadata(video_id):
+    metadata = retrieve_data(f"{video_id}_metadata")
+    return metadata
 
 # Background task to process frames
 @huey.task()
@@ -940,7 +945,7 @@ async def get_video_frames(video_id: str, start_frame: int = Query(0), end_frame
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
     frames = npz_data["frames"]
-    metadata = npz_data["metadata"].item()
+    metadata = retrieve_data(f"{video_id}_metadata")
 
     # Adjust end_frame if None
     if end_frame is None:
@@ -991,7 +996,7 @@ async def get_mask_frames(video_id: str, start_frame: int = None, end_frame: int
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
-    metadata = npz_data["metadata"].item()
+    metadata = retrieve_data(f"{video_id}_metadata")
     frames_metadata = metadata.get("masks", {})
 
     if start_frame is None:
@@ -1025,7 +1030,7 @@ async def set_mask(video_id: str, masks: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
-    metadata = npz_data["metadata"].item()
+    metadata =  retrieve_data(f"{video_id}_metadata")
 
     # Update metadata with new masks
     for frame_number, mask_data in masks.items():
@@ -1036,9 +1041,11 @@ async def set_mask(video_id: str, masks: dict):
             image_id = metadata["masks"][mask]["img_id"]
             image = fetch_image(image_id)
             metadata["masks"][mask]["img"] = image
+        
+    store_data(f"{video_id}_metadata", metadata)
 
     # Save updated metadata
-    np.savez(npz_path, frames=npz_data["frames"], pts_to_frame_number=npz_data["pts_to_frame_number"].item(), metadata=metadata)
+    np.savez(npz_path, frames=npz_data["frames"], pts_to_frame_number=npz_data["pts_to_frame_number"].item())
 
     return {"status": "Success"}
 
@@ -1054,7 +1061,7 @@ async def get_keyframes(video_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error loading keyframes")
 
-    keyframes = npz_data["metadata"].item().get("keyframes", [])
+    keyframes =  retrieve_data(f"{video_id}_metadata").get("keyframes", [])
     return {"keyframes": keyframes}
     # Assuming effect settings are stored separately
     #effect_settings = get_effect_settings_for_keyframes(video_id)
@@ -1071,13 +1078,15 @@ async def set_keyframes(video_id: str, new_keyframes: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error loading video")
     
-    metadata = npz_data["metadata"].item()
+    metadata =  retrieve_data(f"{video_id}_metadata")
     
     keyframes = metadata.get("keyframes", {})
     keyframes.update(new_keyframes)
     metadata["keyframes"] = keyframes
 
-    np.savez(npz_path, frames=npz_data["frames"], pts_to_frame_number=npz_data["pts_to_frame_number"].item(), metadata=metadata)
+    store_data(f"{video_id}_metadata", metadata)
+
+    np.savez(npz_path, frames=npz_data["frames"], pts_to_frame_number=npz_data["pts_to_frame_number"].item())
     return({"status": "Success"})
 
 @app.get("/video/export_masks/{video_id}/", tags=["video"])
@@ -1095,11 +1104,12 @@ async def export_masks(video_id: str, masked_video: bool = False):
         print(f"Error loading npz data: {str(e)}")
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
-    metadata = npz_data["metadata"].item().get("masks", {})
-    video_folder = os.path.join(storage_folder, "export", video_id)
-    if os.path.exists(video_folder):
-        shutil.rmtree(video_folder)
-    os.mkdir(video_folder)
+    metadata =  retrieve_data(f"{video_id}_metadata").get("masks", {})
+    if not os.path.exists(os.path.join("export", video_id)):
+        os.mkdir(os.path.join("export", video_id))
+    else:
+        shutil.rmtree(os.path.join("export", video_id))
+        os.mkdir(os.path.join("export", video_id))
 
     try:
         video_data = retrieve_data(f"{video_id}_metadata")
@@ -1206,7 +1216,7 @@ async def call_video_endpoint(plugin_name: str, endpoint: str, video_id: str, js
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
     frames = npz_data["frames"]
-    metadata = npz_data["metadata"].item()
+    metadata =  retrieve_data(f"{video_id}_metadata")
 
     print(f"Total frames available: {len(frames)}")
     print(f"Requested start frame: {start_frame}, end frame: {end_frame}")
