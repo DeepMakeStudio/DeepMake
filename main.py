@@ -100,6 +100,7 @@ elif sys.platform == "linux":
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
+    os.mkdir(os.path.join(storage_folder, "export"))
 
 storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
 
