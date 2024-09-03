@@ -64,9 +64,9 @@ def get_id(): # return md5 hash of uuid.getnode()
     return md5(str(uuid.getnode()).encode()).hexdigest()
 
 sentry_sdk.init(
-    dsn="https://d4853d3e3873643fa675bc620a58772c@o4506430643175424.ingest.sentry.io/4506463076614144",
-    traces_sample_rate=0.1,
-    profiles_sample_rate=0.1,
+    dsn="https://8eb4502a9656fc99f54ed2132ed666a7@o4506430643175424.ingest.us.sentry.io/4507890287509504",
+    traces_sample_rate=1.0,
+    profiles_sample_rate=.1,
     enable_tracing=True,
     integrations=[
         HueyIntegration(),
@@ -827,7 +827,19 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
     video.close()
     file.file.seek(0)
 
-    metadata = {"height": video_height, "width": video_width, "frames": number_of_frames}
+    # load video metadata
+    try:
+        metadata = retrieve_data(video_id+"_metadata")
+        if metadata is None:
+            metadata = {"height": video_height, "width": video_width, "frames": number_of_frames, "masks": {}, "image_ids": {}}
+    except:
+        metadata = {"height": video_height, "width": video_width, "frames": number_of_frames, "masks": {}, "image_ids": {}}
+    else:
+        if metadata["height"] != video_height or metadata["width"] != video_width:
+            raise HTTPException(status_code=400, detail="Video resolution mismatch")
+        if metadata["frames"] != number_of_frames:
+            raise HTTPException(status_code=400, detail="Number of frames mismatch")
+    
     # store video metadata in database
     store_data(video_id+"_metadata", metadata)
 
