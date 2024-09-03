@@ -21,8 +21,8 @@ class storage_db:
         self.use_cloud = use_cloud
         self.storage_db = os.path.join(storage_folder, 'data_storage.db')
         if self.use_cloud:
-            self.supabase_url = "https://cvwgevvstqiflapdieon.supabase.co"
-            self.supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2d2dldnZzdHFpZmxhcGRpZW9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjUzODAwNTQsImV4cCI6MjA0MDk1NjA1NH0.lw1_4qI8FpWJHOHNqB20s-sCGi30r4Rloxv6E3rdPBA"
+            self.supabase_url = "https://jpstqtdzwacwqjucbpws.supabase.co"
+            self.supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impwc3RxdGR6d2Fjd3FqdWNicHdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTU4ODAzMDYsImV4cCI6MjAzMTQ1NjMwNn0.tbartx9yDK9NBXWTxDgLF8M0MXUbkujXD6AN6KevHIs"
             self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
         else:
             self.init_db()
@@ -44,7 +44,12 @@ class storage_db:
             try:
                 value = json.dumps(dict(item))
                 response = self.supabase.table('key_value_store').upsert({"key": key, "value": value}).execute()
-                return response.status_code == 201  # Check if the response is successful
+
+                # Check if the response contains data, indicating a successful operation
+                if hasattr(response, 'data') and response.data:
+                    return True
+            
+                return False
             except Exception as e:
                 print(f"Error storing data in Supabase: {e}")
                 return False
@@ -60,6 +65,7 @@ class storage_db:
             except Exception as e:
                 print(f"Error storing data in local SQLite: {e}")
                 return False
+
 
     def retrieve_data(self, key: str):
         if self.use_cloud:
