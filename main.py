@@ -291,6 +291,14 @@ def process_frames_with_plugin(img_ids, prompt, plugin_port):
 async def redirect_docs():
     return RedirectResponse("/docs/")
 
+@app.get("/roto.html")
+async def provide_rotopage():
+    return FileResponse("roto.html")
+
+@app.get("/script.js")
+async def provide_script():
+    return FileResponse("script.js")
+
 @app.get("/plugins/reload")
 async def reload_plugins():
     reload_plugin_list()
@@ -841,7 +849,7 @@ async def extract_frames(video_path: str, video_id: str):
         cap = cv2.VideoCapture(video_path)
         pts_to_frame_number = {}
         frames = []
-        metadata = {"include_points": {}, "exclude_points": {}, "masks": {}, "image_ids": {}, "keyframes": {}}
+        frame_metadata = {}
 
         frame_number = 0
         while True:
@@ -862,7 +870,7 @@ async def extract_frames(video_path: str, video_id: str):
 
             # Store image and get image ID
             image_id = store_image(img_bytes, img_id)
-            metadata["image_ids"][f"frame_{frame_number}"] = image_id
+            frame_metadata[f"frame_{frame_number}"] = image_id
 
             frames.append(frame)
             # if frame_number % 30 == 0:  # Store keyframes
@@ -874,6 +882,8 @@ async def extract_frames(video_path: str, video_id: str):
 
         frames_array = np.array(frames)
         # keyframes_array = np.array(keyframes)
+        metadata = retrieve_data(f"{video_id}_metadata")
+        metadata["image_ids"] = frame_metadata
         store_data(f"{video_id}_metadata", metadata)
         if not os.path.exists(os.path.join(storage_folder, f"{video_id}.npz")):
             np.savez(os.path.join(storage_folder, f"{video_id}.npz"), frames=frames_array, pts_to_frame_number=pts_to_frame_number)
@@ -1032,6 +1042,8 @@ async def set_mask(video_id: str, masks: dict):
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
     metadata =  retrieve_data(f"{video_id}_metadata")
+    if "masks" not in metadata:
+        metadata["masks"] = {}
 
     # Update metadata with new masks
     for frame_number, mask_data in masks.items():
@@ -1105,12 +1117,14 @@ async def export_masks(video_id: str, masked_video: bool = False):
         print(f"Error loading npz data: {str(e)}")
         raise HTTPException(status_code=500, detail="Error loading video frames")
 
-    metadata =  retrieve_data(f"{video_id}_metadata").get("masks", {})
-    if not os.path.exists(os.path.join("export", video_id)):
-        os.mkdir(os.path.join("export", video_id))
+    metadata = retrieve_data(f"{video_id}_metadata").get("masks", {})
+    video_folder = os.path.join(storage_folder, "export", video_id)
+    if not os.path.exists(video_folder):
+        os.makedirs(video_folder)
     else:
-        shutil.rmtree(os.path.join("export", video_id))
-        os.mkdir(os.path.join("export", video_id))
+        shutil.rmtree(video_folder)
+        os.makedirs(video_folder)
+        
 
     try:
         video_data = retrieve_data(f"{video_id}_metadata")
@@ -1127,9 +1141,9 @@ async def export_masks(video_id: str, masked_video: bool = False):
             if "img_id" in mask:
                 if not os.path.exists(os.path.join(video_folder, maskname.replace(" ", "_"))):
                     # Create a new folder for the mask
-                    os.mkdir(os.path.join(video_folder, maskname.replace(" ", "_")))
+                    os.makedirs(os.path.join(video_folder, maskname.replace(" ", "_")))
                     if masked_video:
-                        os.mkdir(os.path.join(video_folder, maskname.replace(" ", "_")+"_masked"))
+                        os.makedirs(os.path.join(video_folder, maskname.replace(" ", "_")+"_masked"))
                 try:
                     mask_image = Image.open(BytesIO(fetch_image(mask["img_id"])))
                 except Exception as e:
