@@ -13,6 +13,8 @@ import shutil
 import threading
 import sqlite3
 import json
+from redis import Redis
+from ec2_metadata import ec2_metadata
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -25,15 +27,28 @@ elif sys.platform == "linux":
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
-
-storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
+storage_mode = "local"
+# my_user = os.environ.get("USER")
+# if my_user == 'ubuntu':
+#     storage_mode = "aws"
+try:
+    ec2_metadata.region
+    storage_mode = "aws"
+except:
+    pass
+if storage_mode == "local":
+    storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
+elif storage_mode == "aws":
+    storage = Redis(host='test2-wsjgqw.serverless.use1.cache.amazonaws.com', port=6379, ssl=True)
 print(storage_folder)
 
 def fetch_image(img_id):
-    img_data = storage.peek_data(img_id)
-    if img_data == huey.constants.EmptyData:
-        # print("No image found for id", img_id)
-        raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
+    if storage_mode == "local":
+        img_data = storage.peek_data(img_id)
+        if img_data == EmptyData:
+            raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
+    elif storage_mode == "aws":
+        img_data = storage.get(img_id)
     return img_data
 
 def fetch_pil_image(img_id):
@@ -46,12 +61,16 @@ def store_pil_image(img, img_id=None):
     img_data = output.getvalue()
     return store_image(img_data, img_id)
 
+
 def store_image(img_data, img_id=None):
     if img_id is None:
       img_id = str(uuid.uuid4())
-    if not isinstance(img_data, bytes):
-        raise HTTPException(status_code=400, detail=f"Data must be stored in bytes")
-    storage.put_data(img_id, img_data)
+    #if not isinstance(img_data, bytes):
+        #raise HTTPException(status_code=400, detail=f"Data must be stored in bytes")
+    if storage_mode == "local":
+        storage.put_data(img_id, img_data)
+    elif storage_mode == "aws":
+        storage.set(img_id, img_data)
     return img_id
 
 def store_multiple_images(img_data):

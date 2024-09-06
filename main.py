@@ -10,6 +10,7 @@ from PIL import Image
 from io import BytesIO
 from auth_handler import auth_handler as auth
 from plugin import Plugin
+from ec2_metadata import ec2_metadata
 
 import os
 import base64
@@ -35,13 +36,18 @@ import sqlite3
 # from PySide6.QtWidgets import QApplication
 import cv2
 import io
-
+from redis import Redis 
 import asyncio
 from huey.exceptions import TaskException
 from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
+import logging
+import boto3
 
 UI_ENABLED = False
+
+
+
 
 origins = [
     "http://deepmake.com",
@@ -52,6 +58,7 @@ origins = [
     "http://127.0.0.1:8080",
     "*"
 ]
+
 
 origin_regexes = [
     "http://.*\.deepmake\.com",
@@ -102,7 +109,22 @@ if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
     os.mkdir(os.path.join(storage_folder, "export"))
 
-storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
+storage_mode = "local"
+# my_user = os.environ.get("USER")
+# if my_user == 'ubuntu':
+#     storage_mode = "aws"
+try:
+    ec2_metadata.region
+    storage_mode = "aws"
+except:
+    pass
+if storage_mode == "local":
+    storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
+elif storage_mode == "aws":
+    print("On AWS")
+    storage = Redis(host='test2-wsjgqw.serverless.use1.cache.amazonaws.com', port=6379, ssl=True)
+
+
 
 huey = SqliteHuey(filename=os.path.join(storage_folder,'huey.db'))
 
@@ -153,9 +175,12 @@ plugin_memory = {}
 PLUGINS_DIRECTORY = "plugin"
 
 def fetch_image(img_id):
-    img_data = storage.peek_data(img_id)
-    if img_data == EmptyData:
-        raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
+    if storage_mode == "local":
+        img_data = storage.peek_data(img_id)
+        if img_data == EmptyData:
+            raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
+    elif storage_mode == "aws":
+        img_data = storage.get(img_id)
     return img_data
 
 @app.get("/get_main_pid/{pid}")
@@ -227,13 +252,19 @@ def store_image(img_data, img_id=None):
       img_id = str(uuid.uuid4())
     #if not isinstance(img_data, bytes):
         #raise HTTPException(status_code=400, detail=f"Data must be stored in bytes")
-    storage.put_data(img_id, img_data)
+    if storage_mode == "local":
+        storage.put_data(img_id, img_data)
+    elif storage_mode == "aws":
+        storage.set(img_id, img_data)
     return img_id
 
 async def upload_store_image(data):
     img_data = await data.read()
     img_id = str(uuid.uuid4())
-    storage.put_data(img_id,img_data)
+    if storage_mode == "local":
+        storage.put_data(img_id, img_data)
+    elif storage_mode == "aws":
+        storage.set(img_id, img_data)
     return img_id
 
 def available_gpu_memory():

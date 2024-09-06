@@ -25,3 +25,5 @@ dependencies:
       - pyside6
       - opencv-python
       - pyav
+      - redis
+      - ec2-metadata
