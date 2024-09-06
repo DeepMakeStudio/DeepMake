@@ -41,8 +41,6 @@ import asyncio
 from huey.exceptions import TaskException
 from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
-import logging
-import boto3
 
 UI_ENABLED = False
 
