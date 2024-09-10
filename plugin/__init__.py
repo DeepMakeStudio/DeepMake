@@ -14,7 +14,7 @@ import threading
 import sqlite3
 import json
 from redis import Redis
-from ec2_metadata import ec2_metadata
+from config import storage_mode
 
 if sys.platform == "win32":
     storage_folder = os.path.join(os.getenv('APPDATA'),"DeepMake")
@@ -27,25 +27,20 @@ elif sys.platform == "linux":
 
 if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
-storage_mode = "local"
-# my_user = os.environ.get("USER")
-# if my_user == 'ubuntu':
-#     storage_mode = "aws"
-try:
-    ec2_metadata.region
-    storage_mode = "aws"
-except:
-    pass
+
 if storage_mode == "local":
     storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
 elif storage_mode == "aws":
-    storage = Redis(host='test2-wsjgqw.serverless.use1.cache.amazonaws.com', port=6379, ssl=True)
+    from config import aws_endpoint
+    print("On AWS")
+    storage = Redis(host=aws_endpoint, port=6379, ssl=True)
+
 print(storage_folder)
 
 def fetch_image(img_id):
     if storage_mode == "local":
         img_data = storage.peek_data(img_id)
-        if img_data == EmptyData:
+        if img_data == huey.constants.EmptyData:
             raise HTTPException(status_code=400, detail=f"No image found for id {img_id}")
     elif storage_mode == "aws":
         img_data = storage.get(img_id)

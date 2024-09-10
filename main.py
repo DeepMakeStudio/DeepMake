@@ -41,7 +41,7 @@ import asyncio
 from huey.exceptions import TaskException
 from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
-
+from config import storage_mode
 UI_ENABLED = False
 
 
@@ -107,20 +107,13 @@ if not os.path.exists(storage_folder):
     os.mkdir(storage_folder)
     os.mkdir(os.path.join(storage_folder, "export"))
 
-storage_mode = "local"
-# my_user = os.environ.get("USER")
-# if my_user == 'ubuntu':
-#     storage_mode = "aws"
-try:
-    ec2_metadata.region
-    storage_mode = "aws"
-except:
-    pass
+
 if storage_mode == "local":
     storage = SqliteStorage(name="storage", filename=os.path.join(storage_folder, 'huey_storage.db'))
 elif storage_mode == "aws":
+    from config import aws_endpoint
     print("On AWS")
-    storage = Redis(host='test2-wsjgqw.serverless.use1.cache.amazonaws.com', port=6379, ssl=True)
+    storage = Redis(host=aws_endpoint, port=6379, ssl=True)
 
 
 
