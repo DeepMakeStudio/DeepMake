@@ -35,6 +35,8 @@ import sqlite3
 # from PySide6.QtWidgets import QApplication
 import cv2
 import io
+from huey.signals import SIGNAL_EXECUTING
+
 
 import asyncio
 from huey.exceptions import TaskException
@@ -178,6 +180,10 @@ def startup():
     pid = p.pid
 
     process_ids["huey"] = pid
+
+
+
+
 
 def init_db():
     conn = sqlite3.connect(os.path.join(storage_folder, 'data_storage.db'))
@@ -551,7 +557,7 @@ async def call_endpoint(plugin_name: str, endpoint: str, json_data: dict, priori
     return {"job_id": job.id}
 
 @huey.task()
-def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints):
+def huey_call_endpoint(plugin_name: str, endpoint: str, json_data: dict, port_mapping, plugin_endpoints,task=None):
     result = client.get("http://127.0.0.1:8000/plugins/get_states") # Calls REST instead of directly because of missing global due to threading
     if result.status_code == 200:
         result = result.json()
@@ -751,7 +757,7 @@ def move_job(job_id):
         running_jobs.remove(job_id) 
         finished_jobs.append(job_id)
 
-@app.get("/job/{job_id}")
+@app.get("/job/get_job/{job_id}")
 def get_job(job_id: str):
     try:
         job = jobs[job_id]
@@ -768,6 +774,32 @@ def get_job(job_id: str):
     except TaskException as e:
         return {"status": "Job failed", "detail": str(e)}
     return result
+
+@app.get("/job/view_all")
+def view_all_jobs():
+    print([dir(task) for task in huey.pending()])
+    all_task_ids = [task.id for task in huey.pending()]
+    current_task = huey.storage.peek_data("current_task")
+    current_task = current_task.decode("utf-8") if current_task != EmptyData else "No task is running"
+    return {"status": "success", "all_task_ids": all_task_ids, "current_task": current_task}
+
+@app.get("/job/cancel/{job_id}")
+def cancel_job(job_id: str):
+    huey.revoke_by_id(job_id)
+    return {"status": "success", "message": f"Job {job_id} cancelled"}
+
+@app.get("/job/cancel_all")
+def cancel_all_jobs():
+    huey_call_endpoint.revoke()
+    huey_set_config.revoke()
+    huey_enqueue_process_frames.revoke()
+    return {"status": "success", "message": "All jobs cancelled"}
+
+@huey.signal(SIGNAL_EXECUTING)
+def task_signal_executing(signal, task):
+    task_id = task.id.encode("utf-8")
+    huey.storage.put_data(f"current_task", task_id)
+
 
 @app.get("/image/get/{img_id}")
 async def get_img(img_id: str):
