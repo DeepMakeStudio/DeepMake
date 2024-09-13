@@ -832,13 +832,14 @@ async def upload_video(request: Request, file: UploadFile = File(...)):
         metadata = retrieve_data(video_id+"_metadata")
         if metadata is None:
             metadata = {"height": video_height, "width": video_width, "frames": number_of_frames, "masks": {}, "image_ids": {}}
+        else:
+            if metadata["height"] != video_height or metadata["width"] != video_width:
+                raise HTTPException(status_code=400, detail="Video resolution mismatch")
+            if metadata["frames"] != number_of_frames:
+                raise HTTPException(status_code=400, detail="Number of frames mismatch")
     except:
         metadata = {"height": video_height, "width": video_width, "frames": number_of_frames, "masks": {}, "image_ids": {}}
-    else:
-        if metadata["height"] != video_height or metadata["width"] != video_width:
-            raise HTTPException(status_code=400, detail="Video resolution mismatch")
-        if metadata["frames"] != number_of_frames:
-            raise HTTPException(status_code=400, detail="Number of frames mismatch")
+    
     
     # store video metadata in database
     store_data(video_id+"_metadata", metadata)
@@ -1136,12 +1137,13 @@ async def export_masks(video_id: str, masked_video: bool = False):
     else:
         shutil.rmtree(video_folder)
         os.makedirs(video_folder)
-        
 
     try:
         video_data = retrieve_data(f"{video_id}_metadata")
     except Exception as e:
         print(f"Error loading video metadata: {str(e)}")
+
+    blank_image = Image.fromarray(np.zeros((video_data["height"], video_data["width"], 3), dtype=np.uint8))
 
     for frame_name in metadata.keys():
         frame = metadata[frame_name]
@@ -1168,6 +1170,9 @@ async def export_masks(video_id: str, masked_video: bool = False):
                     masked_image = np.where(np.repeat(np.expand_dims(np.asarray(mask_image), axis=2), 3, axis=2) > 0, original_image, 0)
                     masked_filename = os.path.join(video_folder, maskname.replace(" ", "_")+"_masked", f"{frame_number.zfill(5)}.png")
                     masked_image = Image.fromarray(masked_image).save(masked_filename)
+            else:
+                filename = os.path.join(video_folder, maskname.replace(" ", "_"), f"{frame_number.zfill(5)}.png")
+                blank_image.save(filename)
 
     size = video_data["width"], video_data["height"]
 
