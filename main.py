@@ -41,6 +41,12 @@ from huey.exceptions import TaskException
 from fastapi import Depends
 from fastapi.middleware.cors import CORSMiddleware
 
+import boto3
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError
+import logging
+from configuration import AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION, S3_BUCKET_NAME
+
+
 UI_ENABLED = False
 
 origins = [
@@ -282,6 +288,52 @@ def process_frames_with_plugin(img_ids, prompt, plugin_port):
         print(f"Error processing frames with plugin: {response.text}")
         raise HTTPException(status_code=response.status_code, detail="Error processing frames with plugin")
     return response.json()["masks"]
+
+def upload_video_to_s3(file_name, video_file_path):
+    s3 = boto3.client('s3',
+                      aws_access_key_id=AWS_ACCESS_KEY_ID,
+                      aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                      region_name=AWS_DEFAULT_REGION)
+
+    try:
+        # Upload the video to S3
+        s3.upload_file(video_file_path, S3_BUCKET_NAME, file_name)
+        print(f"Upload successful: {file_name}")
+    except FileNotFoundError:
+        print("The file was not found")
+    except NoCredentialsError:
+        print("Credentials not available")
+
+def download_video_from_s3(file_name, download_path):
+    s3 = boto3.client('s3',
+                      aws_access_key_id=AWS_ACCESS_KEY_ID,
+                      aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                      region_name=AWS_DEFAULT_REGION)
+
+    try:
+        # Download the video from S3
+        s3.download_file(S3_BUCKET_NAME, file_name, download_path)
+        print(f"Download successful: {file_name}")
+    except FileNotFoundError:
+        print("The file was not found")
+    except NoCredentialsError:
+        print("Credentials not available")
+
+def get_video_url(file_name):
+    s3 = boto3.client('s3',
+                      aws_access_key_id=AWS_ACCESS_KEY_ID,
+                      aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                      region_name=AWS_DEFAULT_REGION)
+
+    try:
+        # Generate a presigned URL for accessing the video (valid for 1 hour)
+        url = s3.generate_presigned_url('get_object',
+                                        Params={'Bucket': S3_BUCKET_NAME, 'Key': file_name},
+                                        ExpiresIn=3600)
+        return url
+    except NoCredentialsError:
+        print("Credentials not available")
+        return None
 
 
 @app.get("/")
@@ -787,42 +839,30 @@ async def store_multiple_images(data):
     storage.put_data(shape_id, np.array(shape).tobytes())
     return img_id
 
+
 @app.post("/video/upload/", tags=["video"])
-async def upload_video(request: Request, file: UploadFile = File(...)):
-    # Print request headers for debugging
-    print(f"Request headers: {request.headers}")
-    print(f"Content type: {request.headers['content-type']}")
+async def upload_video(file: UploadFile = File(...)):
+    # Generate a unique ID for the video (e.g., hash the video file or generate a UUID)
+    video_id = str(uuid.uuid4())  # Use md5 if needed
     
-    # Print file details
-    print(f"Filename: {file.filename}")
-    print(f"Content type: {file.content_type}")
+    # Save the uploaded file temporarily in memory
+    video_data = await file.read()
 
-    # # Generate a unique ID for the video
-    # video_id = str(uuid.uuid4())
-    # Hask the video file and use as video ID
-    print(f"Hashing video file to generate video ID")
-    video_id = str(md5(file.file.read()).hexdigest())
-    file.file.seek(0)
-    video = av.open(file.file)
-    # Get video height and width
-    video_height = video.streams.video[0].height
-    video_width = video.streams.video[0].width
-    number_of_frames = video.streams.video[0].frames
-    video.close()
-    file.file.seek(0)
+    # Upload the video to S3
+    try:
+        s3 = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID,
+                          aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                          region_name=AWS_DEFAULT_REGION)
 
-    print(f"Video ID: {video_id}") 
-    video_path = os.path.join(storage_folder, f"{video_id}.mp4")
+        s3.put_object(Bucket=S3_BUCKET_NAME, Key=f"{video_id}.mp4", Body=video_data)
+        return {"status": "Success", "video_id": video_id}
 
-    # Save the uploaded video file
-    with open(video_path, "wb") as video_file:
-        shutil.copyfileobj(file.file, video_file)
+    except NoCredentialsError:
+        raise HTTPException(status_code=500, detail="AWS credentials not available")
 
-    # Enqueue background task to process frames
-    huey_enqueue_process_frames(video_path, video_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error uploading video: {str(e)}")
 
-    # Return success response with video ID
-    return {"status": "Success", "video_id": video_id, "metadata": {"height": video_height, "width": video_width, "frames": number_of_frames}}
 
 async def extract_frames(video_path: str, video_id: str):
     try:
@@ -874,6 +914,26 @@ async def extract_frames(video_path: str, video_id: str):
         print(f"Error extracting frames: {str(e)}")
         raise e
 
+@app.get("/video/download/{video_id}", tags=["video"])
+def download_video(video_id: str):
+    try:
+        s3 = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID,
+                          aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                          region_name=AWS_DEFAULT_REGION)
+
+        # Generate a presigned URL for downloading the video
+        url = s3.generate_presigned_url('get_object',
+                                        Params={'Bucket': S3_BUCKET_NAME, 'Key': f"{video_id}.mp4"},
+                                        ExpiresIn=3600)  # 1 hour expiry
+
+        return RedirectResponse(url)
+
+    except NoCredentialsError:
+        raise HTTPException(status_code=500, detail="AWS credentials not available")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating download URL: {str(e)}")
+
 
 # Background task to process frames
 @huey.task()
@@ -885,20 +945,23 @@ def huey_enqueue_process_frames(video_path: str, video_id: str):
 
 @app.get("/video/stream/{video_id}", tags=["video"])
 def stream_video(video_id: str):
-    video_path = os.path.join(storage_folder, f"{video_id}_masked.mp4")
-    if not os.path.exists(video_path):
-        raise HTTPException(status_code=404, detail="Video not found")
+    try:
+        s3 = boto3.client('s3', aws_access_key_id=AWS_ACCESS_KEY_ID,
+                          aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                          region_name=AWS_DEFAULT_REGION)
 
-    def iterfile():
-        print(f"Streaming video file {video_path}")
-        try:
-            with open(video_path, mode="rb") as file_like:
-                yield from file_like
-        except Exception as e:
-            print(f"Error streaming video file: {str(e)}")
-            raise HTTPException(status_code=500, detail="Error streaming video file")
+        # Generate a presigned URL to access the video file
+        url = s3.generate_presigned_url('get_object',
+                                        Params={'Bucket': S3_BUCKET_NAME, 'Key': f"{video_id}.mp4"},
+                                        ExpiresIn=3600)  # 1 hour expiry
 
-    return StreamingResponse(iterfile(), media_type="video/mp4")
+        return RedirectResponse(url)
+
+    except NoCredentialsError:
+        raise HTTPException(status_code=500, detail="AWS credentials not available")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating video URL: {str(e)}")
 
 
 @app.get("/video/pts/{video_id}/", tags=["video"])
