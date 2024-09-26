@@ -7,6 +7,7 @@ import threading
 import time
 import requests
 import queue
+import base64
 
 
 aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
@@ -44,17 +45,17 @@ class LoadBalancer:
     def start_new_instance(self, plugin_name):
         if plugin_name == 'DeepMake':
             user_script = f'''#!/bin/bash
-            cd DeepMake
-            uvicorn main:app --host 0.0.0.0 --port 8000'''
+mkdir hello'''.encode("ascii")
+# cd DeepMake
+# uvicorn main:app --host 0.0.0.0 --port 8000'''
         else:
             user_script = f'''#!/bin/bash
             cd DeepMake
             uvicorn plugin.{plugin_name}.plugin:app --host 0.0.0.0 --port 8000'''
-        # print(user_data)
         response = ec2_client.run_instances(
             ImageId='ami-05c1ffa5b02b5a4eb',  # Replace with  AMI ID
             InstanceType='t2.micro',  # Adjust based on needs
-            # KeyName='Elasticache',
+            KeyName='Elasticache',
             MinCount=1,
             MaxCount=1,
             SecurityGroupIds=['sg-07c085041eb5bbc6a', 'sg-0b7b1fd9b8599217c', 'sg-0c058df2051cb3c0a'],
@@ -90,6 +91,7 @@ class LoadBalancer:
             instance = instance['Instances'][0]
             if instance["InstanceId"] == instance_id:
                 public_ip = instance["PublicIpAddress"]
+                break
 
         # Store instance info
         self.instances.append({'InstanceId': instance_id, 'LaunchTime': time.time(), 'InstanceType': plugin_name, 'InstanceIP': public_ip})
@@ -102,7 +104,31 @@ class LoadBalancer:
         # Remove the instance from the list
         self.instances.remove(instance)
 
-
+    def task_dispatcher(self):
+        while True:
+            try:
+                task = self.task_queue.get(timeout=1)
+                plugin_name = task['plugin_name']
+                user_id = task.get('user_id', 'anonymous')
+                with instance_lock:
+                    # Check if the user is already assigned to an instance
+                    if user_id in user_instance_mapping:
+                        instance_info = user_instance_mapping[user_id]
+                    else:
+                        # Assign an instance using round-robin
+                        instance_info = self.assign_instance(plugin_name)
+                        if instance_info is None:
+                            # No instances available, possibly launch a new one
+                            self.task_queue.put(task)  # Re-queue the task
+                            continue
+                        user_instance_mapping[user_id] = instance_info
+                # Send the task to the assigned instance
+                self.send_task_to_instance(instance_info, task)
+                # Update instance usage
+                update_instance_usage(instance_info)
+            except:
+                # No tasks in the queue
+                time.sleep(1)
     
 
     def assign_instance(self, plugin_name):
@@ -124,7 +150,7 @@ class LoadBalancer:
         public_ip = instance['InstanceIP']
         endpoint = task['endpoint']
         json_data = task['json_data']
-        url = f"http://{public_ip}:8000/plugins/call_endpoint/{task['plugin_name']}/{endpoint}"
+        url = f"http://{public_ip}:8000/{endpoint}"
         try:
             response = requests.put(url, json=json_data, timeout=240)
             response.raise_for_status()
@@ -136,15 +162,15 @@ class LoadBalancer:
 
     def monitor_and_scale(self):
         while True:
-            queue_size = task_queue.qsize()
-            total_instances = len(instances)
+            queue_size = self.task_queue.qsize()
+            total_instances = len(self.instances)
             estimated_wait_time = calculate_wait_time(queue_size, total_instances)
             if estimated_wait_time > QUEUE_WAIT_THRESHOLD and total_instances < MAX_INSTANCES:
                 # Scale up
                 self.start_new_instance()
             elif total_instances > MIN_INSTANCES:
                 # Check for instances to scale down
-                for instance in instances:
+                for instance in self.instances:
                     usage = get_instance_usage(instance)
                     if usage < USAGE_THRESHOLD:
                         self.terminate_instance(instance)
