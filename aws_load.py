@@ -14,7 +14,6 @@ aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
 aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
 aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
 
-print(aws_access_key_id)
 ec2_client = boto3.client('ec2',
     aws_access_key_id=aws_access_key_id,
     aws_secret_access_key=aws_secret_access_key,
@@ -32,8 +31,7 @@ MIN_INSTANCES = 1
 class LoadBalancer:
 
     def __init__(self):
-        self.instances = []
-        self.plugin_instances = {}
+        self.instances = {}
         self.round_robin_pointers = {}
         self.instance_lock = threading.Lock()
         self.task_queue = queue.Queue()
@@ -43,15 +41,6 @@ class LoadBalancer:
 
     
     def start_new_instance(self, plugin_name):
-        if plugin_name == 'DeepMake':
-            user_script = f'''#!/bin/bash
-mkdir hello'''.encode("ascii")
-# cd DeepMake
-# uvicorn main:app --host 0.0.0.0 --port 8000'''
-        else:
-            user_script = f'''#!/bin/bash
-            cd DeepMake
-            uvicorn plugin.{plugin_name}.plugin:app --host 0.0.0.0 --port 8000'''
         response = ec2_client.run_instances(
             ImageId='ami-05c1ffa5b02b5a4eb',  # Replace with  AMI ID
             InstanceType='t2.micro',  # Adjust based on needs
@@ -60,7 +49,7 @@ mkdir hello'''.encode("ascii")
             MaxCount=1,
             SecurityGroupIds=['sg-07c085041eb5bbc6a', 'sg-0b7b1fd9b8599217c', 'sg-0c058df2051cb3c0a'],
             SubnetId='subnet-0da0e54260ec33696',
-            UserData= user_script,  # Adjust the UserData script to start application
+            # UserData= user_script,  # Adjust the UserData script to start application
             TagSpecifications=[
                 {
                     'ResourceType': 'instance',
@@ -79,8 +68,12 @@ mkdir hello'''.encode("ascii")
                 'EnableResourceNameDnsAAAARecord': False
             }
         )
+        if plugin_name not in self.instances.keys():
+            self.instances[plugin_name] = {"starting": [], "running": []}
         instance_id = response['Instances'][0]['InstanceId']
         print(f'Instance {instance_id} started')
+        starting_instance = {'InstanceId': instance_id, 'LaunchTime': time.time()}
+        self.instances[plugin_name]["starting"].append(starting_instance)
         # Wait for the instance to be running and pass status checks
         ec2_client.get_waiter('instance_running').wait(InstanceIds=[instance_id])
         ec2_client.get_waiter('instance_status_ok').wait(InstanceIds=[instance_id])
@@ -94,15 +87,18 @@ mkdir hello'''.encode("ascii")
                 break
 
         # Store instance info
-        self.instances.append({'InstanceId': instance_id, 'LaunchTime': time.time(), 'InstanceType': plugin_name, 'InstanceIP': public_ip})
+        self.instances[plugin_name]["running"].append({'InstanceId': instance_id, 'LaunchTime': time.time(), 'InstanceType': plugin_name, 'InstanceIP': public_ip})
+        self.instances[plugin_name]["starting"].remove(starting_instance)
+        print(self.instances)
+        # self.instances.append({'InstanceId': instance_id, 'LaunchTime': time.time(), 'InstanceIP': public_ip})
 
-    def terminate_instance(self, instance):
+    def terminate_instance(self, instance, plugin_name):
         instance_id = instance['InstanceId']
         # Deregister the instance from the target group
         # Terminate the instance
         ec2_client.terminate_instances(InstanceIds=[instance_id])
         # Remove the instance from the list
-        self.instances.remove(instance)
+        self.instances[plugin_name]["running"].remove(instance)
 
     def task_dispatcher(self):
         while True:
@@ -116,11 +112,14 @@ mkdir hello'''.encode("ascii")
                         instance_info = user_instance_mapping[user_id]
                     else:
                         # Assign an instance using round-robin
-                        instance_info = self.assign_instance(plugin_name)
-                        if instance_info is None:
-                            # No instances available, possibly launch a new one
-                            self.task_queue.put(task)  # Re-queue the task
+                        instances = self.instances.get(plugin_name, [])
+                        if not instances:
+                            # No instances available for this plugin
+                            self.start_new_instance(plugin_name)
+                            self.task_queue.put(task)  # Retry the task
                             continue
+
+                        instance_info = self.assign_instance(plugin_name)
                         user_instance_mapping[user_id] = instance_info
                 # Send the task to the assigned instance
                 self.send_task_to_instance(instance_info, task)
@@ -133,17 +132,17 @@ mkdir hello'''.encode("ascii")
 
     def assign_instance(self, plugin_name):
         with instance_lock:
-            instances = plugin_instances.get(plugin_name, [])
+            instances = self.instances.get(plugin_name, [])
             if not instances:
                 return None  # No instances available for this plugin
             # Initialize the round-robin pointer
-            if plugin_name not in round_robin_pointers:
-                round_robin_pointers[plugin_name] = 0
+            if plugin_name not in self.round_robin_pointers:
+                self.round_robin_pointers[plugin_name] = 0
             # Get the index for the next instance
-            index = round_robin_pointers[plugin_name]
+            index = self.round_robin_pointers[plugin_name]
             instance_info = instances[index]
             # Update the pointer for next time
-            round_robin_pointers[plugin_name] = (index + 1) % len(instances)
+            self.round_robin_pointers[plugin_name] = (index + 1) % len(instances)
             return instance_info
 
     def send_task_to_instance(self, instance, task):
@@ -176,6 +175,7 @@ mkdir hello'''.encode("ascii")
                         self.terminate_instance(instance)
             time.sleep(5)  # Check every 5 seconds
 
-lb = LoadBalancer()
-lb.start_new_instance("DeepMake")
-print(lb.instances)
+# lb = LoadBalancer()
+# lb.start_new_instance("DeepMake")
+# print(lb.instances)
+# lb.terminate_instance(lb.instances["DeepMake"]["running"][0])
