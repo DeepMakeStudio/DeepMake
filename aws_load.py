@@ -1,14 +1,11 @@
 import boto3
-from botocore.exceptions import ClientError
-import sys
 import time 
 import os
 import threading
 import time
 import requests
 import queue
-import base64
-
+from main import app, call_endpoint, huey
 
 aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
 aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
@@ -33,8 +30,10 @@ class LoadBalancer:
     def __init__(self):
         self.instances = {}
         self.round_robin_pointers = {}
-        self.instance_lock = threading.Lock()
         self.task_queue = queue.Queue()
+        self.task_thread = threading.Thread(target=self.task_dispatcher)
+        self.task_thread.daemon = True
+        self.task_thread.start()
         # self.monitor_thread = threading.Thread(target=self.monitor_and_scale)
         # self.monitor_thread.daemon = True
         # self.monitor_thread.start()
@@ -43,7 +42,7 @@ class LoadBalancer:
     def start_new_instance(self, plugin_name):
         response = ec2_client.run_instances(
             ImageId='ami-05c1ffa5b02b5a4eb',  # Replace with  AMI ID
-            InstanceType='t2.micro',  # Adjust based on needs
+            InstanceType='g4dn.xlarge',  # Adjust based on needs
             KeyName='Elasticache',
             MinCount=1,
             MaxCount=1,
@@ -54,7 +53,7 @@ class LoadBalancer:
                 {
                     'ResourceType': 'instance',
                     'Tags': [
-                        {'Key': 'Name', 'Value': 'PluginServer'},
+                        {'Key': 'Name', 'Value': 'Gsam'},
                         {'Key': 'Plugin', 'Value': 'plugin-name'}
                     ]
                 },
@@ -99,65 +98,76 @@ class LoadBalancer:
         ec2_client.terminate_instances(InstanceIds=[instance_id])
         # Remove the instance from the list
         self.instances[plugin_name]["running"].remove(instance)
+    
+    def add_task(self, task):
+        self.task_queue.put(task)
 
     def task_dispatcher(self):
         while True:
             try:
-                task = self.task_queue.get(timeout=1)
+                print("Checking for tasks")
+                print(self.task_queue.qsize())
+                task = self.task_queue.get()
                 plugin_name = task['plugin_name']
-                user_id = task.get('user_id', 'anonymous')
-                with instance_lock:
                     # Check if the user is already assigned to an instance
-                    if user_id in user_instance_mapping:
-                        instance_info = user_instance_mapping[user_id]
-                    else:
+                
                         # Assign an instance using round-robin
-                        instances = self.instances.get(plugin_name, [])
-                        if not instances:
-                            # No instances available for this plugin
-                            self.start_new_instance(plugin_name)
-                            self.task_queue.put(task)  # Retry the task
-                            continue
+                instances = self.instances.get(plugin_name, [])
+                if not instances:
+                    print("No instances available for this plugin")
+                    # No instances available for this plugin
+                    instance_thread = threading.Thread(target=self.start_new_instance, args=(plugin_name,))
+                    instance_thread.start()
+                    # self.start_new_instance(plugin_name)
+                    self.add_task(task)  # Retry the task
+                    time.sleep(3)
+                    continue
+                elif len(instances["running"]) == 0:
+                    # Instance is starting up
+                    print("Instance is starting up")
+                    self.add_task(task)  # Retry the task
+                    time.sleep(1)
+                    continue
 
-                        instance_info = self.assign_instance(plugin_name)
-                        user_instance_mapping[user_id] = instance_info
+                print("Assigning instance")
+
+                instance_info = self.assign_instance(plugin_name)
                 # Send the task to the assigned instance
                 self.send_task_to_instance(instance_info, task)
                 # Update instance usage
-                update_instance_usage(instance_info)
+                # update_instance_usage(instance_info)
             except:
+                print("No tasks in the queue")
                 # No tasks in the queue
                 time.sleep(1)
     
 
     def assign_instance(self, plugin_name):
-        with instance_lock:
-            instances = self.instances.get(plugin_name, [])
-            if not instances:
-                return None  # No instances available for this plugin
-            # Initialize the round-robin pointer
-            if plugin_name not in self.round_robin_pointers:
-                self.round_robin_pointers[plugin_name] = 0
-            # Get the index for the next instance
-            index = self.round_robin_pointers[plugin_name]
-            instance_info = instances[index]
-            # Update the pointer for next time
-            self.round_robin_pointers[plugin_name] = (index + 1) % len(instances)
-            return instance_info
+        instances = self.instances.get(plugin_name, [])["running"]
+        if not instances:
+            return None  # No instances available for this plugin
+        # Initialize the round-robin pointer
+        if plugin_name not in self.round_robin_pointers:
+            self.round_robin_pointers[plugin_name] = 0
+        # Get the index for the next instance
+        index = self.round_robin_pointers[plugin_name]
+        instance_info = instances[index]
+        # Update the pointer for next time
+        self.round_robin_pointers[plugin_name] = (index + 1) % len(instances)
+        return instance_info
 
     def send_task_to_instance(self, instance, task):
         public_ip = instance['InstanceIP']
         endpoint = task['endpoint']
         json_data = task['json_data']
+        plugin_name = task['plugin_name']
         url = f"http://{public_ip}:8000/{endpoint}"
         try:
-            response = requests.put(url, json=json_data, timeout=240)
-            response.raise_for_status()
+            response = call_endpoint(plugin_name, endpoint, json_data, public_ip)
             # Handle response as needed
         except requests.RequestException as e:
             print(f"Failed to send task to instance {instance['InstanceId']}: {e}")
             # Optionally handle failure
-
 
     def monitor_and_scale(self):
         while True:
@@ -175,7 +185,20 @@ class LoadBalancer:
                         self.terminate_instance(instance)
             time.sleep(5)  # Check every 5 seconds
 
-# lb = LoadBalancer()
-# lb.start_new_instance("DeepMake")
-# print(lb.instances)
+
+lb = LoadBalancer()
+# lb.start_new_instance("Gsam")
+print(lb.task_queue.qsize())
+lb.add_task({'plugin_name': 'Gsam', 'endpoint': 'get_mask', 'json_data': {"img": "c96e27d2-9ec1-4f73-aa5b-3979c3017ca0", "prompt": "popcorn"}})
+print(lb.task_queue.qsize())    
+while "Gsam" not in lb.instances.keys():
+
+    # print(lb.instances)
+    # print(lb.task_queue.qsize())  
+    time.sleep(10)
+while len(lb.instances["Gsam"]["running"]) == 0:
+
+    # print(lb.instances)
+    # print(lb.task_queue.qsize())    
+    time.sleep(10)
 # lb.terminate_instance(lb.instances["DeepMake"]["running"][0])
