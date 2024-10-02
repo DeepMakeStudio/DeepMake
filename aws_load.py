@@ -5,7 +5,8 @@ import threading
 import time
 import requests
 import queue
-from main import app, call_endpoint, huey
+# from main import app, call_endpoint, huey
+import asyncio
 
 aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
 aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
@@ -34,11 +35,11 @@ class LoadBalancer:
         self.task_thread = threading.Thread(target=self.task_dispatcher)
         self.task_thread.daemon = True
         self.task_thread.start()
+        self.running_tasks = {}
         # self.monitor_thread = threading.Thread(target=self.monitor_and_scale)
         # self.monitor_thread.daemon = True
         # self.monitor_thread.start()
 
-    
     def start_new_instance(self, plugin_name):
         response = ec2_client.run_instances(
             ImageId='ami-05c1ffa5b02b5a4eb',  # Replace with  AMI ID
@@ -53,7 +54,7 @@ class LoadBalancer:
                 {
                     'ResourceType': 'instance',
                     'Tags': [
-                        {'Key': 'Name', 'Value': 'Gsam'},
+                        {'Key': 'Name', 'Value': plugin_name},
                         {'Key': 'Plugin', 'Value': 'plugin-name'}
                     ]
                 },
@@ -102,6 +103,7 @@ class LoadBalancer:
     def add_task(self, task):
         self.task_queue.put(task)
 
+
     def task_dispatcher(self):
         while True:
             try:
@@ -132,12 +134,16 @@ class LoadBalancer:
                 print("Assigning instance")
 
                 instance_info = self.assign_instance(plugin_name)
+                print("Instance assigned: ", instance_info)
                 # Send the task to the assigned instance
-                self.send_task_to_instance(instance_info, task)
+
+                task_thread = threading.Thread(target=self.send_task_to_instance, args=(instance_info, task))
+                task_thread.start()
                 # Update instance usage
                 # update_instance_usage(instance_info)
-            except:
-                print("No tasks in the queue")
+            except Exception as e:
+                print("Error in task dispatcher: ", str(e))
+
                 # No tasks in the queue
                 time.sleep(1)
     
@@ -157,17 +163,28 @@ class LoadBalancer:
         return instance_info
 
     def send_task_to_instance(self, instance, task):
+        print("Sending task to instance")
         public_ip = instance['InstanceIP']
         endpoint = task['endpoint']
-        json_data = task['json_data']
+        json_data = task.get('json_data', None)
         plugin_name = task['plugin_name']
         url = f"http://{public_ip}:8000/{endpoint}"
+        if plugin_name not in self.running_tasks.keys():
+            self.running_tasks[plugin_name] = []
+        self.running_tasks[plugin_name].append(task)
+
         try:
-            response = call_endpoint(plugin_name, endpoint, json_data, public_ip)
+            if json_data is not None:
+                response = requests.put(url, json=json_data)
+            else:
+                response = requests.get(url)
+            print(response.json())
+            # asyncio.run(call_endpoint(plugin_name, endpoint, json_data, public_ip))
             # Handle response as needed
-        except requests.RequestException as e:
+        except Exception as e:
             print(f"Failed to send task to instance {instance['InstanceId']}: {e}")
             # Optionally handle failure
+        self.running_tasks[plugin_name].remove(task)
 
     def monitor_and_scale(self):
         while True:
@@ -188,17 +205,8 @@ class LoadBalancer:
 
 lb = LoadBalancer()
 # lb.start_new_instance("Gsam")
-print(lb.task_queue.qsize())
-lb.add_task({'plugin_name': 'Gsam', 'endpoint': 'get_mask', 'json_data': {"img": "c96e27d2-9ec1-4f73-aa5b-3979c3017ca0", "prompt": "popcorn"}})
-print(lb.task_queue.qsize())    
-while "Gsam" not in lb.instances.keys():
-
-    # print(lb.instances)
-    # print(lb.task_queue.qsize())  
-    time.sleep(10)
-while len(lb.instances["Gsam"]["running"]) == 0:
-
-    # print(lb.instances)
-    # print(lb.task_queue.qsize())    
+lb.add_task({'plugin_name': 'DeepMake', 'endpoint': 'plugins/get_list'})
+while True:
+    print(lb.running_tasks)
     time.sleep(10)
 # lb.terminate_instance(lb.instances["DeepMake"]["running"][0])
