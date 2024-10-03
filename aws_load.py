@@ -36,13 +36,19 @@ class LoadBalancer:
         self.task_thread.daemon = True
         self.task_thread.start()
         self.running_tasks = {}
+        self.ami_map = {"DeepMake": "ami-05c1ffa5b02b5a4eb", "Gsam": "ami-02279046f6b349605"}
         # self.monitor_thread = threading.Thread(target=self.monitor_and_scale)
         # self.monitor_thread.daemon = True
         # self.monitor_thread.start()
 
     def start_new_instance(self, plugin_name):
+        ami = self.ami_map.get(plugin_name, None)
+        if ami is None:
+            print("No AMI found for plugin")
+            return
+        print(ami)
         response = ec2_client.run_instances(
-            ImageId='ami-05c1ffa5b02b5a4eb',  # Replace with  AMI ID
+            ImageId=ami,  # Replace with  AMI ID
             InstanceType='g4dn.xlarge',  # Adjust based on needs
             KeyName='Elasticache',
             MinCount=1,
@@ -115,7 +121,7 @@ class LoadBalancer:
                 
                         # Assign an instance using round-robin
                 instances = self.instances.get(plugin_name, [])
-                if not instances:
+                if not instances or (len(instances["running"]) == 0 and len(instances["starting"]) == 0):
                     print("No instances available for this plugin")
                     # No instances available for this plugin
                     instance_thread = threading.Thread(target=self.start_new_instance, args=(plugin_name,))
@@ -205,7 +211,9 @@ class LoadBalancer:
 
 lb = LoadBalancer()
 # lb.start_new_instance("Gsam")
-lb.add_task({'plugin_name': 'DeepMake', 'endpoint': 'plugins/get_list'})
+pseudo_instance = {'InstanceId': 'i-06bd0928fecfe0f51', 'LaunchTime': time.time(), 'InstanceType': 'Gsam', 'InstanceIP': '3.87.157.19'}
+pseudo_task = {'plugin_name': 'Gsam', 'endpoint': 'get_info'}
+lb.send_task_to_instance(pseudo_instance, pseudo_task)
 while True:
     print(lb.running_tasks)
     time.sleep(10)
