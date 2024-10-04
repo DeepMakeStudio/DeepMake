@@ -53,7 +53,7 @@ class LoadBalancer:
             KeyName='Elasticache',
             MinCount=1,
             MaxCount=1,
-            SecurityGroupIds=['sg-07c085041eb5bbc6a', 'sg-0b7b1fd9b8599217c', 'sg-0c058df2051cb3c0a'],
+            SecurityGroupIds=['sg-07c085041eb5bbc6a', 'sg-0b7b1fd9b8599217c', 'sg-0c058df2051cb3c0a', 'sg-076f0dce9f923f9a4'],
             SubnetId='subnet-0da0e54260ec33696',
             # UserData= user_script,  # Adjust the UserData script to start application
             TagSpecifications=[
@@ -83,6 +83,9 @@ class LoadBalancer:
         # Wait for the instance to be running and pass status checks
         ec2_client.get_waiter('instance_running').wait(InstanceIds=[instance_id])
         ec2_client.get_waiter('instance_status_ok').wait(InstanceIds=[instance_id])
+
+        
+
         # Register the instance with the target group
 
         instance_list = ec2_client.describe_instances()['Reservations']
@@ -91,6 +94,18 @@ class LoadBalancer:
             if instance["InstanceId"] == instance_id:
                 public_ip = instance["PublicIpAddress"]
                 break
+
+        if plugin_name == "Gsam":
+            while True:
+                url = f"http://{public_ip}:8000/get_config"
+                try: 
+                    response = requests.get(url)
+                    print(response.json())
+                    if response.status_code == 200:
+                        break
+                except:
+                    time.sleep(10)
+                    continue
 
         # Store instance info
         self.instances[plugin_name]["running"].append({'InstanceId': instance_id, 'LaunchTime': time.time(), 'InstanceType': plugin_name, 'InstanceIP': public_ip})
@@ -211,9 +226,11 @@ class LoadBalancer:
 
 lb = LoadBalancer()
 # lb.start_new_instance("Gsam")
-pseudo_instance = {'InstanceId': 'i-06bd0928fecfe0f51', 'LaunchTime': time.time(), 'InstanceType': 'Gsam', 'InstanceIP': '3.87.157.19'}
-pseudo_task = {'plugin_name': 'Gsam', 'endpoint': 'get_info'}
-lb.send_task_to_instance(pseudo_instance, pseudo_task)
+# pseudo_instance = {'InstanceId': 'i-06bd0928fecfe0f51', 'LaunchTime': time.time(), 'InstanceType': 'Gsam', 'InstanceIP': '54.205.252.61'}
+# pseudo_task = {'plugin_name': 'Gsam', 'endpoint': 'execute', 'json_data': {"img": "081228a1-f4f5-4e00-9698-33cea5147d22", "prompt": "popcorn"}}
+# lb.send_task_to_instance(pseudo_instance, pseudo_task)
+lb.add_task({'plugin_name': 'DeepMake', 'endpoint': 'plugins/get_list'})
+lb.add_task({'plugin_name': 'Gsam', 'endpoint': 'get_info'})
 while True:
     print(lb.running_tasks)
     time.sleep(10)
