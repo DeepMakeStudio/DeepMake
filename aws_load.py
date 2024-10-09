@@ -47,37 +47,39 @@ class LoadBalancer:
             print("No AMI found for plugin")
             return
         print(ami)
-        response = ec2_client.run_instances(
-            ImageId=ami,  # Replace with  AMI ID
-            InstanceType='g4dn.xlarge',  # Adjust based on needs
-            KeyName='Elasticache',
-            MinCount=1,
-            MaxCount=1,
-            SecurityGroupIds=['sg-07c085041eb5bbc6a', 'sg-0b7b1fd9b8599217c', 'sg-0c058df2051cb3c0a', 'sg-076f0dce9f923f9a4'],
-            SubnetId='subnet-0da0e54260ec33696',
+        response = ec2_client.request_spot_instances(
+            LaunchSpecification={
+            "ImageId": ami,  # Replace with  AMI ID
+            "InstanceType": 'g4dn.xlarge',  # Adjust based on needs
+            "KeyName": 'Elasticache',
+            "SecurityGroupIds":['sg-07c085041eb5bbc6a', 'sg-0b7b1fd9b8599217c', 'sg-0c058df2051cb3c0a', 'sg-076f0dce9f923f9a4'],
+            "SubnetId":'subnet-0da0e54260ec33696',
             # UserData= user_script,  # Adjust the UserData script to start application
+            
+            # MetadataOptions={
+            #     'HttpTokens': 'required',
+            # },
+            # PrivateDnsNameOptions={
+            #     'HostnameType': 'ip-name',
+            #     'EnableResourceNameDnsARecord': True,
+            #     'EnableResourceNameDnsAAAARecord': False
+            # }
+            },
+            InstanceCount =  1,
             TagSpecifications=[
                 {
-                    'ResourceType': 'instance',
+                    'ResourceType': 'spot-instances-request',
                     'Tags': [
                         {'Key': 'Name', 'Value': plugin_name},
-                        {'Key': 'Plugin', 'Value': 'plugin-name'}
                     ]
                 },
             ],
-            MetadataOptions={
-                'HttpTokens': 'required',
-            },
-            PrivateDnsNameOptions={
-                'HostnameType': 'ip-name',
-                'EnableResourceNameDnsARecord': True,
-                'EnableResourceNameDnsAAAARecord': False
-            }
+
         )
         if plugin_name not in self.instances.keys():
             self.instances[plugin_name] = {"starting": [], "running": []}
-        instance_id = response['Instances'][0]['InstanceId']
-        print(f'Instance {instance_id} started')
+    
+        instance_id = response['SpotInstanceRequests'][0]['InstanceId']
         starting_instance = {'InstanceId': instance_id, 'LaunchTime': time.time()}
         self.instances[plugin_name]["starting"].append(starting_instance)
         # Wait for the instance to be running and pass status checks
