@@ -65,7 +65,7 @@ def store_image(img_data, img_id=None):
     if storage_mode == "local":
         storage.put_data(img_id, img_data)
     elif storage_mode == "aws":
-        storage.set(img_id, img_data)
+        storage.set(img_id, img_data, ex=1209600)
     return img_id
 
 def store_multiple_images(img_data):
