@@ -65,14 +65,14 @@ class LoadBalancer:
         self.task_thread.daemon = True
         self.task_thread.start()
 
-        # self.task_thread = threading.Thread(target=self.task_dispatcher, args=("Gsam",))
-        # self.task_thread.daemon = True
-        # self.task_thread.start()
+        self.task_thread = threading.Thread(target=self.task_dispatcher, args=("Gsam",))
+        self.task_thread.daemon = True
+        self.task_thread.start()
 
         # Start Monitor and Scale Thread
-        # self.monitor_thread = threading.Thread(target=self.monitor_and_scale)
-        # self.monitor_thread.daemon = True
-        # self.monitor_thread.start()
+        self.monitor_thread = threading.Thread(target=self.monitor_and_scale)
+        self.monitor_thread.daemon = True
+        self.monitor_thread.start()
         print("Load Balancer initialized and monitoring started.")
 
     def start_new_instance(self, plugin_name):
@@ -111,21 +111,24 @@ class LoadBalancer:
         )
         if plugin_name not in self.instances.keys():
             self.instances[plugin_name] = {"starting": [], "running": []}
+        placeholder_instance = {'InstanceId': 'pending', 'LaunchTime': time.time()}
+        self.instances[plugin_name]["starting"].append(placeholder_instance)
+
         request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
         request_list = ec2_client.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
         while request_list["SpotInstanceRequests"][0]["State"] != "active":
             time.sleep(5)
             request_list = ec2_client.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
         instance_id = request_list["SpotInstanceRequests"][0]["InstanceId"]
-        print(instance_id)
         starting_instance = {'InstanceId': instance_id, 'LaunchTime': time.time()}
         with self.instance_lock:
-            if plugin_name not in self.instances:
-                self.instances[plugin_name] = {"starting": [], "running": []}
+            
+            self.instances[plugin_name]["starting"].remove(placeholder_instance)
             self.instances[plugin_name]["starting"].append(starting_instance)
 
         # Handle instance transition in a separate thread to avoid blocking
-        self.handle_instance_transition(plugin_name, instance_id)
+        
+        threading.Thread(target=self.handle_instance_transition, args=(plugin_name, instance_id)).start()
 
     def handle_instance_transition(self, plugin_name, instance_id):
         """Transition instance from 'starting' to 'running'."""
@@ -188,9 +191,7 @@ class LoadBalancer:
 
     def add_task(self, task):
         plugin_name = task['plugin_name']
-        if plugin_name in self.pending_tasks:
-            print(f"INFO: Task for plugin {plugin_name} is already pending. Skipping duplicate.")
-            return
+        
         task['enqueue_time'] = time.time()
         self.task_queue[plugin_name].put(task)
         print(f"INFO: Task added to queue for plugin {plugin_name}. Current queue size: {self.task_queue[plugin_name].qsize()}")
@@ -203,25 +204,22 @@ class LoadBalancer:
             plugin_name = task['plugin_name']
             print(f"INFO: Dispatcher picked up task for plugin {plugin_name}. Current queue size after pickup: {self.task_queue[plugin_name].qsize()}")
             instances = self.instances.get(plugin_name, {"running": [], "starting": []})
-            print("Instances: ", instances)
-            # with self.instance_lock:
-            if not instances["running"] and not instances["starting"]:
-                print("A")
-                print(f"INFO: No instances available for plugin {plugin_name}, starting a new one...")
-                instance_thread = threading.Thread(target=self.start_new_instance, args=(plugin_name,))
-                instance_thread.start()
-                self.pending_tasks[plugin_name] = task  # Store the task as pending
-                time.sleep(3)
-                continue
-
-            elif not instances["running"]:
-                print("B")
-                if plugin_name not in self.pending_tasks:
-                    print(f"INFO: Plugin {plugin_name} instances are still starting up. Task is pending.")
+            # print("Instances: ", instances)
+            with self.instance_lock:
+                if not instances["running"] and not instances["starting"]:
+                    print(f"INFO: No instances available for plugin {plugin_name}, starting a new one...")
+                    instance_thread = threading.Thread(target=self.start_new_instance, args=(plugin_name,))
+                    instance_thread.start()
                     self.pending_tasks[plugin_name] = task  # Store the task as pending
-                time.sleep(3)
-                continue
-            print("C")
+                    self.add_task(task)  # Re-add the task to the queue
+                    time.sleep(3)
+                    continue
+
+                elif not instances["running"]:
+                    print(f"INFO: Plugin {plugin_name} instances are still starting up. Task is pending.")
+                    self.add_task(task)  # Re-add the task to the queue
+                    time.sleep(3)
+                    continue
             # Assign a running instance to the task
             instance_info = self.assign_instance(plugin_name)
             print("Instance assigned: ", instance_info)
@@ -297,8 +295,8 @@ class LoadBalancer:
 if __name__ == "__main__":
     lb = LoadBalancer()
     lb.add_task({'plugin_name': 'DeepMake', 'endpoint': 'plugins/get_list'})
-    # lb.add_task({'plugin_name': 'Gsam', 'endpoint': 'get_info'})
+    lb.add_task({'plugin_name': 'Gsam', 'endpoint': 'get_info'})
     while True:
         print(f"Running tasks: {lb.running_tasks}")
-        # print(f"Instances: {lb.instances}")
+        print(f"Instances: {lb.instances}")
         time.sleep(30)
