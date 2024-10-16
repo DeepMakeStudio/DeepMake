@@ -42,11 +42,10 @@ class LoadBalancer:
         # self.monitor_thread.start()
 
     def start_new_instance(self, plugin_name):
-        ami = self.ami_map.get(plugin_name, None)
-        if ami is None:
-            print("No AMI found for plugin")
+        ami = self.ami_map.get(plugin_name)
+        if not ami:
+            print(f"ERROR: No AMI found for plugin {plugin_name}")
             return
-        print(ami)
         response = ec2_client.request_spot_instances(
             LaunchSpecification={
             "ImageId": ami,  # Replace with  AMI ID
@@ -78,8 +77,13 @@ class LoadBalancer:
         )
         if plugin_name not in self.instances.keys():
             self.instances[plugin_name] = {"starting": [], "running": []}
-    
-        instance_id = response['SpotInstanceRequests'][0]['InstanceId']
+        request_id = response['SpotInstanceRequests'][0]['SpotInstanceRequestId']
+        request_list = ec2_client.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
+        while request_list["SpotInstanceRequests"][0]["State"] != "active":
+            time.sleep(5)
+            request_list = ec2_client.describe_spot_instance_requests(SpotInstanceRequestIds=[request_id])
+        instance_id = request_list["SpotInstanceRequests"][0]["InstanceId"]
+        print(instance_id)
         starting_instance = {'InstanceId': instance_id, 'LaunchTime': time.time()}
         self.instances[plugin_name]["starting"].append(starting_instance)
         # Wait for the instance to be running and pass status checks
